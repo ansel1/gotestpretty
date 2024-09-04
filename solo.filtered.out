@@ -1,0 +1,57 @@
+{"Time":"2024-08-31T18:12:41.335006-04:00","Action":"start","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt"}
+{"Time":"2024-08-31T18:12:42.294688-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestAuthentication"}
+{"Time":"2024-08-31T18:12:42.294798-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestAuthentication","Output":"=== RUN   TestAuthentication\n"}
+{"Time":"2024-08-31T18:12:42.392167-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestAuthentication","Output":"--- PASS: TestAuthentication (0.10s)\n"}
+{"Time":"2024-08-31T18:12:42.392264-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestAuthentication","Elapsed":0.1}
+{"Time":"2024-08-31T18:12:42.392664-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupCreate"}
+{"Time":"2024-08-31T18:12:42.392688-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupCreate","Output":"=== RUN   TestUserGroupCreate\n"}
+{"Time":"2024-08-31T18:12:42.576258-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupCreate","Output":"--- PASS: TestUserGroupCreate (0.18s)\n"}
+{"Time":"2024-08-31T18:12:42.576323-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupCreate","Elapsed":0.18}
+{"Time":"2024-08-31T18:12:42.576344-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupDelete"}
+{"Time":"2024-08-31T18:12:42.576355-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupDelete","Output":"=== RUN   TestUserGroupDelete\n"}
+{"Time":"2024-08-31T18:12:42.593728-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupDelete","Output":"--- PASS: TestUserGroupDelete (0.02s)\n"}
+{"Time":"2024-08-31T18:12:42.593832-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupDelete","Elapsed":0.02}
+{"Time":"2024-08-31T18:12:42.593868-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupAddUsers"}
+{"Time":"2024-08-31T18:12:42.59389-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupAddUsers","Output":"=== RUN   TestUserGroupAddUsers\n"}
+{"Time":"2024-08-31T18:12:42.861362-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupAddUsers","Output":"--- PASS: TestUserGroupAddUsers (0.27s)\n"}
+{"Time":"2024-08-31T18:12:42.861429-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupAddUsers","Elapsed":0.27}
+{"Time":"2024-08-31T18:12:42.861448-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupRemoveUsers"}
+{"Time":"2024-08-31T18:12:42.861459-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupRemoveUsers","Output":"=== RUN   TestUserGroupRemoveUsers\n"}
+{"Time":"2024-08-31T18:12:43.289471-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupRemoveUsers","Output":"--- PASS: TestUserGroupRemoveUsers (0.43s)\n"}
+{"Time":"2024-08-31T18:12:43.289559-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupRemoveUsers","Elapsed":0.43}
+{"Time":"2024-08-31T18:12:43.289586-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupInfo"}
+{"Time":"2024-08-31T18:12:43.2896-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupInfo","Output":"=== RUN   TestUserGroupInfo\n"}
+{"Time":"2024-08-31T18:12:43.466682-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupInfo","Output":"--- PASS: TestUserGroupInfo (0.18s)\n"}
+{"Time":"2024-08-31T18:12:43.466796-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupInfo","Elapsed":0.18}
+{"Time":"2024-08-31T18:12:43.466813-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupQuery"}
+{"Time":"2024-08-31T18:12:43.466845-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupQuery","Output":"=== RUN   TestUserGroupQuery\n"}
+{"Time":"2024-08-31T18:12:43.803571-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupQuery","Output":"--- PASS: TestUserGroupQuery (0.34s)\n"}
+{"Time":"2024-08-31T18:12:43.803607-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestUserGroupQuery","Elapsed":0.34}
+{"Time":"2024-08-31T18:12:43.803615-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestFindUserGroups"}
+{"Time":"2024-08-31T18:12:43.803634-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestFindUserGroups","Output":"=== RUN   TestFindUserGroups\n"}
+{"Time":"2024-08-31T18:12:44.093368-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestFindUserGroups","Output":"--- PASS: TestFindUserGroups (0.29s)\n"}
+{"Time":"2024-08-31T18:12:44.093442-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestFindUserGroups","Elapsed":0.29}
+{"Time":"2024-08-31T18:12:44.093457-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestCreateUser"}
+{"Time":"2024-08-31T18:12:44.093479-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestCreateUser","Output":"=== RUN   TestCreateUser\n"}
+{"Time":"2024-08-31T18:12:44.123066-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestCreateUser","Output":"--- PASS: TestCreateUser (0.03s)\n"}
+{"Time":"2024-08-31T18:12:44.123179-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestCreateUser","Elapsed":0.03}
+{"Time":"2024-08-31T18:12:44.123222-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestDeleteUser"}
+{"Time":"2024-08-31T18:12:44.123244-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestDeleteUser","Output":"=== RUN   TestDeleteUser\n"}
+{"Time":"2024-08-31T18:12:44.196958-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestDeleteUser","Output":"--- PASS: TestDeleteUser (0.07s)\n"}
+{"Time":"2024-08-31T18:12:44.197064-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestDeleteUser","Elapsed":0.07}
+{"Time":"2024-08-31T18:12:44.197084-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestJSONUnmarshaling"}
+{"Time":"2024-08-31T18:12:44.197094-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestJSONUnmarshaling","Output":"=== RUN   TestJSONUnmarshaling\n"}
+{"Time":"2024-08-31T18:12:44.197117-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestJSONUnmarshaling","Output":"    user_test.go:76: TestJsonUnmarshalling u {2016-05-16 19:33:21.199549 +0000 +0000 james@local \u003cnil\u003e 0 james james 2016-05-16 19:33:21.199549 +0000 +0000 local|0b3fb9ff-de36-41aa-b442-067dc19e2ef8  \u003cnil\u003e \u003cnil\u003e 0 \u003cnil\u003e \u003cnil\u003e \u003cnil\u003e \u003cnil\u003e \u003cnil\u003e  \u003cnil\u003e [] \u003cnil\u003e  \u003cnil\u003e  \u003cnil\u003e \u003cnil\u003e false \u003cnil\u003e  \u003cnil\u003e \u003cnil\u003e \u003cnil\u003e}\n"}
+{"Time":"2024-08-31T18:12:44.197164-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestJSONUnmarshaling","Output":"--- PASS: TestJSONUnmarshaling (0.00s)\n"}
+{"Time":"2024-08-31T18:12:44.197176-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestJSONUnmarshaling","Elapsed":0}
+{"Time":"2024-08-31T18:12:44.197187-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestSplitConnectionAndUser"}
+{"Time":"2024-08-31T18:12:44.197197-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestSplitConnectionAndUser","Output":"=== RUN   TestSplitConnectionAndUser\n"}
+{"Time":"2024-08-31T18:12:44.197211-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestSplitConnectionAndUser","Output":"--- PASS: TestSplitConnectionAndUser (0.00s)\n"}
+{"Time":"2024-08-31T18:12:44.197279-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestSplitConnectionAndUser","Elapsed":0}
+{"Time":"2024-08-31T18:12:44.197293-04:00","Action":"run","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestMergeConnectionAndUser"}
+{"Time":"2024-08-31T18:12:44.197302-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestMergeConnectionAndUser","Output":"=== RUN   TestMergeConnectionAndUser\n"}
+{"Time":"2024-08-31T18:12:44.197312-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestMergeConnectionAndUser","Output":"--- PASS: TestMergeConnectionAndUser (0.00s)\n"}
+{"Time":"2024-08-31T18:12:44.197322-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Test":"TestMergeConnectionAndUser","Elapsed":0}
+{"Time":"2024-08-31T18:12:44.197332-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Output":"PASS\n"}
+{"Time":"2024-08-31T18:12:44.198904-04:00","Action":"output","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Output":"ok  \tgitlab.protectv.local/ncryptify/solo.git/usermgmt\t2.864s\n"}
+{"Time":"2024-08-31T18:12:44.201149-04:00","Action":"pass","Package":"gitlab.protectv.local/ncryptify/solo.git/usermgmt","Elapsed":2.866}
