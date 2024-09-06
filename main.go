@@ -6,10 +6,13 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/ansel1/merry/v2"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"io"
 	"os"
 	"slices"
@@ -60,36 +63,51 @@ func main() {
 	}
 }
 
-type testNode struct {
+type node struct {
 	name      string
-	output    string
 	status    string
-	children  []testNode
-	parent    *testNode
+	children  []node
+	parent    *node
 	outputBuf *bytes.Buffer
 	elapsed   time.Duration
 }
 
 type model struct {
-	rootNode testNode
-	err      error
-	quitting bool
-	spinner  spinner.Model
-	onEvent  func(TestEvent)
+	root                        node
+	err                         error
+	quitting                    bool
+	spinner                     spinner.Model
+	onEvent                     func(TestEvent)
+	passes, fails, skips, total int
+	start                       time.Time
 }
 
 func initialModel() *model {
 	spin := spinner.New(spinner.WithSpinner(spinner.MiniDot))
 	return &model{
+		start:   time.Now(),
 		spinner: spin,
 	}
 }
 
+func process(r io.Reader, onEvent func(TestEvent)) error {
+	s := bufio.NewScanner(r)
+	for s.Scan() {
+		var e TestEvent
+		err := json.Unmarshal(s.Bytes(), &e)
+		if err != nil {
+			return merry.Prepend(err, "failed to parse test event")
+		}
+		e.orig = s.Text()
+
+		onEvent(e)
+	}
+	return nil
+}
+
 func (m *model) Init() tea.Cmd {
 	f := func() tea.Msg {
-		p := NewProcessor(bufio.NewReader(os.Stdin))
-		p.onEvent = m.onEvent
-		return p.Process()
+		return process(bufio.NewReader(os.Stdin), m.onEvent)
 	}
 	return tea.Batch(m.spinner.Tick, tea.Sequence(f, tea.Quit))
 }
@@ -100,7 +118,7 @@ func (m *model) processEvent(e TestEvent) {
 		split = []string{}
 	}
 	split = append([]string{e.Package}, split...)
-	currNode := &m.rootNode
+	currNode := &m.root
 	var currNodeIdx int
 
 TOP:
@@ -112,7 +130,7 @@ TOP:
 				continue TOP
 			}
 		}
-		node := testNode{
+		node := node{
 			name:   s,
 			parent: currNode,
 		}
@@ -134,20 +152,25 @@ TOP:
 	}
 
 	switch e.Action {
-	case "start", "run", "pause", "cont", "bench", "fail", "skip":
-		currNode.output = ""
+	case "fail":
+		m.fails++
+		m.total++
+		currNode.status = e.Action
+	case "skip":
+		m.skips++
+		m.total++
+		currNode.status = e.Action
+	case "start", "run", "pause", "cont", "bench":
 		currNode.status = e.Action
 	case "pass":
+		m.passes++
+		m.total++
 		currNode.status = e.Action
 		if currNode.parent != nil && currNode.parent.parent != nil {
 			parent := currNode.parent
 			parent.children = slices.Delete(parent.children, currNodeIdx, currNodeIdx+1)
 			// don't ref currNode again, it will be zeroized by the above call
 		}
-	case "output":
-		o := e.Output
-		o = strings.Replace(o, "\n", "\\n", -1)
-		currNode.output = o
 	}
 
 }
@@ -176,7 +199,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) printNode(n *testNode, lvl int, writer io.Writer) {
+func (m *model) printNode(n *node, lvl int, writer io.Writer) {
 	for i := 0; i < lvl; i++ {
 		writer.Write([]byte("  "))
 	}
@@ -186,7 +209,11 @@ func (m *model) printNode(n *testNode, lvl int, writer io.Writer) {
 	}
 }
 
-func (m *model) println(n *testNode, writer io.Writer) {
+var iconPassed = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true).Render("✓")
+var iconSkipped = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true).Render("️⍉")
+var iconFailed = lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).Render("️✖")
+
+func (m *model) println(n *node, writer io.Writer) {
 	if n.name == "" {
 		// root node, no self output
 		return
@@ -198,11 +225,11 @@ func (m *model) println(n *testNode, writer io.Writer) {
 	case "pause":
 		fmt.Fprintf(writer, "⏸ %s %s\n", n.name, printBufBytes(n.outputBuf))
 	case "fail":
-		fmt.Fprintf(writer, "✖ %s %s %s\n", n.name, printBufBytes(n.outputBuf), n.elapsed.String())
+		fmt.Fprintf(writer, "%s %s %s %s\n", iconFailed, n.name, printBufBytes(n.outputBuf), n.elapsed.String())
 	case "skip":
-		fmt.Fprintf(writer, "⍉️ %s %s %s\n", n.name, printBufBytes(n.outputBuf), n.elapsed.String())
+		fmt.Fprintf(writer, "%s %s %s %s\n", iconSkipped, n.name, printBufBytes(n.outputBuf), n.elapsed.String())
 	case "pass":
-		fmt.Fprintf(writer, "✓ %s %s %s\n", n.name, printBufBytes(n.outputBuf), n.elapsed.String())
+		fmt.Fprintf(writer, "%s %s %s %s\n", iconPassed, n.name, printBufBytes(n.outputBuf), n.elapsed.String())
 	}
 
 }
@@ -213,7 +240,16 @@ func (m *model) View() string {
 	}
 
 	var sb strings.Builder
-	m.printNode(&m.rootNode, 0, &sb)
+	m.printNode(&m.root, 0, &sb)
+
+	fmt.Fprintf(&sb, "\n%d tests", m.total)
+	if m.skips > 0 {
+		fmt.Fprintf(&sb, ", %d skipped", m.skips)
+	}
+	if m.fails > 0 {
+		fmt.Fprintf(&sb, ", %d failed", m.fails)
+	}
+	fmt.Fprintf(&sb, " in %s\n", time.Now().Sub(m.start).String())
 
 	if m.quitting {
 		sb.WriteRune('\n')
