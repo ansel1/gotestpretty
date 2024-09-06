@@ -51,10 +51,15 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
+	if m.fails > 0 {
+		os.Exit(1)
+	}
 }
 
 type node struct {
 	name      string
+	start     time.Time
 	status    string
 	children  []node
 	parent    *node
@@ -117,33 +122,73 @@ func (m *model) Init() tea.Cmd {
 	return tea.Batch(m.spinner.Tick, f)
 }
 
-func (m *model) processEvent(e TestEvent) {
-	split := strings.Split(e.Test, "/")
-	if len(split) == 1 && strings.TrimSpace(split[0]) == "" {
-		split = []string{}
+func (m *model) nodeFor(e TestEvent) *node {
+	nameParts := strings.Split(e.Test, "/")
+	if len(nameParts) == 1 && strings.TrimSpace(nameParts[0]) == "" {
+		nameParts = []string{}
 	}
-	split = append([]string{e.Package}, split...)
+	nameParts = append([]string{e.Package}, nameParts...)
 	currNode := &m.root
 	var currNodeIdx int
 
-TOP:
-	for _, s := range split {
+	findNode := func(name string) {
 		for i, child := range currNode.children {
-			if child.name == s {
+			if child.name == name {
 				currNode = &currNode.children[i]
 				currNodeIdx = i
-				continue TOP
+
+				return
 			}
 		}
+
 		node := node{
-			name:   s,
+			name:   name,
 			parent: currNode,
 			isTest: e.Test != "",
+			start:  time.Now(),
 		}
 		currNode.children = append(currNode.children, node)
 		currNodeIdx = len(currNode.children) - 1
 		currNode = &currNode.children[currNodeIdx]
 	}
+
+	for _, s := range nameParts {
+		findNode(s)
+	}
+
+	return currNode
+
+}
+
+func (m *model) processEvent(e TestEvent) {
+	// 	split := strings.Split(e.Test, "/")
+	// 	if len(split) == 1 && strings.TrimSpace(split[0]) == "" {
+	// 		split = []string{}
+	// 	}
+	// 	split = append([]string{e.Package}, split...)
+	// 	currNode := &m.root
+	// 	var currNodeIdx int
+	//
+	// TOP:
+	// 	for _, s := range split {
+	// 		for i, child := range currNode.children {
+	// 			if child.name == s {
+	// 				currNode = &currNode.children[i]
+	// 				currNodeIdx = i
+	// 				continue TOP
+	// 			}
+	// 		}
+	// 		node := node{
+	// 			name:   s,
+	// 			parent: currNode,
+	// 			isTest: e.Test != "",
+	// 		}
+	// 		currNode.children = append(currNode.children, node)
+	// 		currNodeIdx = len(currNode.children) - 1
+	// 		currNode = &currNode.children[currNodeIdx]
+	// 	}
+
+	currNode := m.nodeFor(e)
 
 	if e.Output != "" {
 		if currNode.outputBuf == nil {
@@ -155,25 +200,35 @@ TOP:
 
 	if e.Elapsed > 0 {
 		currNode.elapsed = time.Duration(e.Elapsed * float64(time.Second))
+		currNode.start = time.Time{}
 	}
 
 	switch e.Action {
 	case "fail":
-		if e.Test != "" {
+		if currNode.isTest {
 			m.fails++
 			m.total++
 		}
 		currNode.status = e.Action
 	case "skip":
-		if e.Test != "" {
+		if currNode.isTest {
 			m.skips++
 			m.total++
 		}
 		currNode.status = e.Action
-	case "start", "run", "pause", "cont", "bench":
+	case "pause":
+		currNode.status = e.Action
+		if currNode.isTest {
+			currNode.elapsed = time.Now().Sub(currNode.start)
+			currNode.start = time.Now()
+		}
+	case "cont":
+		currNode.status = e.Action
+		currNode.start = time.Now()
+	case "start", "run", "bench":
 		currNode.status = e.Action
 	case "pass":
-		if e.Test != "" {
+		if currNode.isTest {
 			m.passes++
 			m.total++
 		}
@@ -247,15 +302,15 @@ func (m *model) println(n *node, writer io.Writer) {
 
 	switch n.status {
 	case "start", "run", "cont", "bench":
-		fmt.Fprintf(writer, "%s %s %s\n", m.spinner.View(), n.name, printBufBytes(n.outputBuf))
+		fmt.Fprintf(writer, "%s %s %s %s\n", m.spinner.View(), n.name, printBufBytes(n.outputBuf), round(n.elapsed+time.Now().Sub(n.start), 1))
 	case "pause":
-		fmt.Fprintf(writer, "⏸ %s %s\n", n.name, printBufBytes(n.outputBuf))
+		fmt.Fprintf(writer, "⏸ %s %s %s\n", n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
 	case "fail":
-		fmt.Fprintf(writer, "%s %s %s %s\n", iconFailed, n.name, printBufBytes(n.outputBuf), n.elapsed.String())
+		fmt.Fprintf(writer, "%s %s %s %s\n", iconFailed, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
 	case "skip":
-		fmt.Fprintf(writer, "%s %s %s %s\n", iconSkipped, n.name, printBufBytes(n.outputBuf), n.elapsed.String())
+		fmt.Fprintf(writer, "%s %s %s %s\n", iconSkipped, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
 	case "pass":
-		fmt.Fprintf(writer, "%s %s %s %s\n", iconPassed, n.name, printBufBytes(n.outputBuf), n.elapsed.String())
+		fmt.Fprintf(writer, "%s %s %s %s\n", iconPassed, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
 	}
 
 }
@@ -284,7 +339,7 @@ func (m *model) View() string {
 	if m.fails > 0 {
 		fmt.Fprintf(&sb, ", %d failed", m.fails)
 	}
-	fmt.Fprintf(&sb, " in %s\n", time.Now().Sub(m.start).String())
+	fmt.Fprintf(&sb, " in %s\n", round(time.Now().Sub(m.start), 1))
 
 	if m.quitting {
 		sb.WriteRune('\n')
@@ -312,4 +367,19 @@ func byteCountDecimal(b int) string {
 	}
 
 	return fmt.Sprintf("%.9g%cB", float64(b)/float64(div), "kMGTPE"[exp])
+}
+
+var divs = []time.Duration{
+	time.Duration(1), time.Duration(10), time.Duration(100), time.Duration(1000)}
+
+func round(d time.Duration, digits int) time.Duration {
+	switch {
+	case d > time.Second:
+		d = d.Round(time.Second / divs[digits])
+	case d > time.Millisecond:
+		d = d.Round(time.Millisecond / divs[digits])
+	case d > time.Microsecond:
+		d = d.Round(time.Microsecond / divs[digits])
+	}
+	return d
 }
