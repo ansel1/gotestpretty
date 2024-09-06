@@ -15,7 +15,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"io"
 	"os"
-	"slices"
 	"strings"
 	"time"
 )
@@ -27,6 +26,7 @@ var flags struct {
 	includePassed  bool
 	includeSkipped bool
 	includeSlow    bool
+	slowThreshold  time.Duration
 }
 
 func init() {
@@ -36,6 +36,8 @@ func init() {
 	flag.BoolVar(&flags.includePassed, "include-passed", false, "Include passed tests")
 	flag.BoolVar(&flags.includeSlow, "include-slow", false, "Include slow tests")
 	flag.BoolVar(&flags.includeSkipped, "include-skipped", true, "Include skipped tests")
+	flag.DurationVar(&flags.slowThreshold, "slow-threshold", time.Second, "Set slow threshold")
+
 	flag.Parse()
 }
 
@@ -70,6 +72,7 @@ type node struct {
 	parent    *node
 	outputBuf *bytes.Buffer
 	elapsed   time.Duration
+	isTest    bool
 }
 
 type model struct {
@@ -133,6 +136,7 @@ TOP:
 		node := node{
 			name:   s,
 			parent: currNode,
+			isTest: e.Test != "",
 		}
 		currNode.children = append(currNode.children, node)
 		currNodeIdx = len(currNode.children) - 1
@@ -153,24 +157,25 @@ TOP:
 
 	switch e.Action {
 	case "fail":
-		m.fails++
-		m.total++
+		if e.Test != "" {
+			m.fails++
+			m.total++
+		}
 		currNode.status = e.Action
 	case "skip":
-		m.skips++
-		m.total++
+		if e.Test != "" {
+			m.skips++
+			m.total++
+		}
 		currNode.status = e.Action
 	case "start", "run", "pause", "cont", "bench":
 		currNode.status = e.Action
 	case "pass":
-		m.passes++
-		m.total++
-		currNode.status = e.Action
-		if currNode.parent != nil && currNode.parent.parent != nil {
-			parent := currNode.parent
-			parent.children = slices.Delete(parent.children, currNodeIdx, currNodeIdx+1)
-			// don't ref currNode again, it will be zeroized by the above call
+		if e.Test != "" {
+			m.passes++
+			m.total++
 		}
+		currNode.status = e.Action
 	}
 
 }
@@ -199,7 +204,24 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func skip(n *node) bool {
+	switch {
+	case !n.isTest:
+		return false
+	case flags.includeSlow && n.elapsed > flags.slowThreshold:
+		return false
+	case !flags.includeSkipped && n.status == "skip":
+		return true
+	case !flags.includePassed && n.status == "pass":
+		return true
+	}
+	return false
+}
+
 func (m *model) printNode(n *node, lvl int, writer io.Writer) {
+	if skip(n) {
+		return
+	}
 	for i := 0; i < lvl; i++ {
 		writer.Write([]byte("  "))
 	}
