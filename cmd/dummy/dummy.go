@@ -30,7 +30,6 @@ var rate replayRate
 
 func main() {
 	flag.Var(&rate, "replay", "")
-	// flag.Float64Var(&replayRate, "replay", 1, "")
 
 	flag.Parse()
 

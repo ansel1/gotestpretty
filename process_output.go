@@ -13,3 +13,7 @@ type TestEvent struct {
 	Output  string
 	orig    string
 }
+
+type RawOutput string
+
+type Done struct{}

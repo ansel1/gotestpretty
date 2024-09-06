@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/ansel1/merry/v2"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -46,18 +45,7 @@ func main() {
 	m := initialModel()
 	p := tea.NewProgram(m, tea.WithInput(nil))
 
-	var lastTs time.Time
-	m.onEvent = func(e TestEvent) {
-		if flags.replay {
-			if !lastTs.IsZero() && !e.Time.IsZero() {
-				pause := e.Time.Sub(lastTs)
-				pause = time.Duration(float64(pause) * flags.rate)
-				time.Sleep(pause)
-			}
-			lastTs = e.Time
-		}
-		p.Send(e)
-	}
+	m.send = p.Send
 
 	if _, err := p.Run(); err != nil {
 		fmt.Println(err)
@@ -80,39 +68,53 @@ type model struct {
 	err                         error
 	quitting                    bool
 	spinner                     spinner.Model
-	onEvent                     func(TestEvent)
+	send                        func(tea.Msg)
 	passes, fails, skips, total int
 	start                       time.Time
+	rawOutput                   *bytes.Buffer
 }
 
 func initialModel() *model {
 	spin := spinner.New(spinner.WithSpinner(spinner.MiniDot))
 	return &model{
-		start:   time.Now(),
-		spinner: spin,
+		start:     time.Now(),
+		spinner:   spin,
+		rawOutput: bytes.NewBuffer(nil),
 	}
 }
 
-func process(r io.Reader, onEvent func(TestEvent)) error {
+func process(r io.Reader, send func(tea.Msg)) tea.Msg {
+	var lastTs time.Time
+
 	s := bufio.NewScanner(r)
 	for s.Scan() {
 		var e TestEvent
 		err := json.Unmarshal(s.Bytes(), &e)
 		if err != nil {
-			return merry.Prepend(err, "failed to parse test event")
+			// this line wasn't valid json, so just print it
+			send(RawOutput(s.Text()))
+			continue
 		}
-		e.orig = s.Text()
 
-		onEvent(e)
+		if flags.replay {
+			if !lastTs.IsZero() && !e.Time.IsZero() {
+				pause := e.Time.Sub(lastTs)
+				pause = time.Duration(float64(pause) * flags.rate)
+				time.Sleep(pause)
+			}
+			lastTs = e.Time
+		}
+
+		send(e)
 	}
-	return nil
+	return Done{}
 }
 
 func (m *model) Init() tea.Cmd {
 	f := func() tea.Msg {
-		return process(bufio.NewReader(os.Stdin), m.onEvent)
+		return process(bufio.NewReader(os.Stdin), m.send)
 	}
-	return tea.Batch(m.spinner.Tick, tea.Sequence(f, tea.Quit))
+	return tea.Batch(m.spinner.Tick, f)
 }
 
 func (m *model) processEvent(e TestEvent) {
@@ -190,8 +192,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "esc", "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
-		default:
-			return m, nil
 		}
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -199,7 +199,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case TestEvent:
 		m.processEvent(msg)
-		return m, nil
+	case RawOutput:
+		m.rawOutput.WriteString(string(msg))
+	case Done:
+		m.quitting = true
+		return m, tea.Quit
 	}
 	return m, nil
 }
@@ -262,9 +266,18 @@ func (m *model) View() string {
 	}
 
 	var sb strings.Builder
-	m.printNode(&m.root, 0, &sb)
+	if m.rawOutput.Len() > 0 {
+		fmt.Fprintf(&sb, "%s\n\n", m.rawOutput.String())
+	}
 
-	fmt.Fprintf(&sb, "\n%d tests", m.total)
+	m.printNode(&m.root, -1, &sb)
+
+	fmt.Fprintf(&sb, "\n")
+	if m.quitting {
+		fmt.Fprintf(&sb, "DONE ")
+	}
+
+	fmt.Fprintf(&sb, "%d tests", m.total)
 	if m.skips > 0 {
 		fmt.Fprintf(&sb, ", %d skipped", m.skips)
 	}
