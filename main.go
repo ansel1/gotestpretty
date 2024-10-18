@@ -45,7 +45,7 @@ func main() {
 	m := initialModel()
 	p := tea.NewProgram(m, tea.WithInput(nil))
 
-	m.send = p.Send
+	m.prog = p
 
 	if _, err := p.Run(); err != nil {
 		fmt.Println(err)
@@ -73,31 +73,30 @@ type model struct {
 	err                         error
 	quitting                    bool
 	spinner                     spinner.Model
-	send                        func(tea.Msg)
+	prog                        *tea.Program
 	passes, fails, skips, total int
 	start                       time.Time
-	rawOutput                   *bytes.Buffer
 }
 
 func initialModel() *model {
-	spin := spinner.New(spinner.WithSpinner(spinner.MiniDot))
 	return &model{
-		start:     time.Now(),
-		spinner:   spin,
-		rawOutput: bytes.NewBuffer(nil),
+		start:   time.Now(),
+		spinner: spinner.New(spinner.WithSpinner(spinner.MiniDot)),
 	}
 }
 
-func process(r io.Reader, send func(tea.Msg)) tea.Msg {
+func (m *model) process(r io.Reader) tea.Msg {
 	var lastTs time.Time
 
 	s := bufio.NewScanner(r)
 	for s.Scan() {
 		var e TestEvent
-		err := json.Unmarshal(s.Bytes(), &e)
+		decoder := json.NewDecoder(bytes.NewReader(s.Bytes()))
+		decoder.DisallowUnknownFields()
+		err := decoder.Decode(&e)
 		if err != nil {
 			// this line wasn't valid json, so just print it
-			send(RawOutput(s.Text()))
+			m.prog.Println(s.Text())
 			continue
 		}
 
@@ -110,14 +109,24 @@ func process(r io.Reader, send func(tea.Msg)) tea.Msg {
 			lastTs = e.Time
 		}
 
-		send(e)
+		m.prog.Send(e)
 	}
 	return Done{}
 }
 
 func (m *model) Init() tea.Cmd {
 	f := func() tea.Msg {
-		return process(bufio.NewReader(os.Stdin), m.send)
+		var r io.Reader
+		if flags.infile != "" {
+			f, err := os.Open(flags.infile)
+			if err != nil {
+				return err
+			}
+			r = f
+		} else {
+			r = os.Stdin
+		}
+		return m.process(bufio.NewReader(r))
 	}
 	return tea.Batch(m.spinner.Tick, f)
 }
@@ -161,33 +170,6 @@ func (m *model) nodeFor(e TestEvent) *node {
 }
 
 func (m *model) processEvent(e TestEvent) {
-	// 	split := strings.Split(e.Test, "/")
-	// 	if len(split) == 1 && strings.TrimSpace(split[0]) == "" {
-	// 		split = []string{}
-	// 	}
-	// 	split = append([]string{e.Package}, split...)
-	// 	currNode := &m.root
-	// 	var currNodeIdx int
-	//
-	// TOP:
-	// 	for _, s := range split {
-	// 		for i, child := range currNode.children {
-	// 			if child.name == s {
-	// 				currNode = &currNode.children[i]
-	// 				currNodeIdx = i
-	// 				continue TOP
-	// 			}
-	// 		}
-	// 		node := node{
-	// 			name:   s,
-	// 			parent: currNode,
-	// 			isTest: e.Test != "",
-	// 		}
-	// 		currNode.children = append(currNode.children, node)
-	// 		currNodeIdx = len(currNode.children) - 1
-	// 		currNode = &currNode.children[currNodeIdx]
-	// 	}
-
 	currNode := m.nodeFor(e)
 
 	if e.Output != "" {
@@ -219,7 +201,7 @@ func (m *model) processEvent(e TestEvent) {
 	case "pause":
 		currNode.status = e.Action
 		if currNode.isTest {
-			currNode.elapsed = time.Now().Sub(currNode.start)
+			currNode.elapsed = time.Since(currNode.start)
 			currNode.start = time.Now()
 		}
 	case "cont":
@@ -254,8 +236,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case TestEvent:
 		m.processEvent(msg)
-	case RawOutput:
-		m.rawOutput.WriteString(string(msg))
 	case Done:
 		m.quitting = true
 		return m, tea.Quit
@@ -282,7 +262,7 @@ func (m *model) printNode(n *node, lvl int, writer io.Writer) {
 		return
 	}
 	for i := 0; i < lvl; i++ {
-		writer.Write([]byte("  "))
+		_, _ = writer.Write([]byte("  "))
 	}
 	m.println(n, writer)
 	for i := range n.children {
@@ -302,7 +282,7 @@ func (m *model) println(n *node, writer io.Writer) {
 
 	switch n.status {
 	case "start", "run", "cont", "bench":
-		fmt.Fprintf(writer, "%s %s %s %s\n", m.spinner.View(), n.name, printBufBytes(n.outputBuf), round(n.elapsed+time.Now().Sub(n.start), 1))
+		fmt.Fprintf(writer, "%s %s %s %s\n", m.spinner.View(), n.name, printBufBytes(n.outputBuf), round(n.elapsed+time.Since(n.start), 1))
 	case "pause":
 		fmt.Fprintf(writer, "⏸ %s %s %s\n", n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
 	case "fail":
@@ -321,9 +301,6 @@ func (m *model) View() string {
 	}
 
 	var sb strings.Builder
-	if m.rawOutput.Len() > 0 {
-		fmt.Fprintf(&sb, "%s\n\n", m.rawOutput.String())
-	}
 
 	m.printNode(&m.root, -1, &sb)
 
@@ -339,7 +316,7 @@ func (m *model) View() string {
 	if m.fails > 0 {
 		fmt.Fprintf(&sb, ", %d failed", m.fails)
 	}
-	fmt.Fprintf(&sb, " in %s\n", round(time.Now().Sub(m.start), 1))
+	fmt.Fprintf(&sb, " in %s\n", round(time.Since(m.start), 1))
 
 	if m.quitting {
 		sb.WriteRune('\n')

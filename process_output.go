@@ -14,6 +14,4 @@ type TestEvent struct {
 	orig    string
 }
 
-type RawOutput string
-
 type Done struct{}
