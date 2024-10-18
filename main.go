@@ -72,7 +72,7 @@ type node struct {
 type model struct {
 	root                        node
 	err                         error
-	quitting                    bool
+	done                        bool
 	spinner                     spinner.Model
 	prog                        *tea.Program
 	passes, fails, skips, total int
@@ -228,7 +228,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
-			m.quitting = true
+			m.done = true
 			return m, tea.Quit
 		}
 	case spinner.TickMsg:
@@ -238,10 +238,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TestEvent:
 		m.processEvent(msg)
 	case Done:
-		m.quitting = true
-		return m, tea.Quit
+		m.done = true
+		return m, m.printFinalSummary
 	}
 	return m, nil
+}
+
+func (m *model) printFinalSummary() tea.Msg {
+	m.prog.Println(m.String())
+	return tea.QuitMsg{}
 }
 
 func skip(n *node) bool {
@@ -306,6 +311,16 @@ func scaledTimeSince(t time.Time) time.Duration {
 }
 
 func (m *model) View() string {
+	// once we're done, we don't want to print any view.  The final
+	// summary will be dumped to the terminal with tea.Program#Println()
+	if m.done {
+		return ""
+	}
+
+	return m.String()
+}
+
+func (m *model) String() string {
 	if m.err != nil {
 		return m.err.Error()
 	}
@@ -315,7 +330,7 @@ func (m *model) View() string {
 	m.printNode(&m.root, -1, &sb)
 
 	fmt.Fprintf(&sb, "\n")
-	if m.quitting {
+	if m.done {
 		fmt.Fprintf(&sb, "DONE ")
 	}
 
@@ -328,9 +343,6 @@ func (m *model) View() string {
 	}
 	fmt.Fprintf(&sb, " in %s\n", round(scaledTimeSince(m.start), 1))
 
-	if m.quitting {
-		sb.WriteRune('\n')
-	}
 	return sb.String()
 }
 
