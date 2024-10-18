@@ -9,13 +9,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"io"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 var flags struct {
@@ -282,7 +283,7 @@ func (m *model) println(n *node, writer io.Writer) {
 
 	switch n.status {
 	case "start", "run", "cont", "bench":
-		fmt.Fprintf(writer, "%s %s %s %s\n", m.spinner.View(), n.name, printBufBytes(n.outputBuf), round(n.elapsed+time.Since(n.start), 1))
+		fmt.Fprintf(writer, "%s %s %s %s\n", m.spinner.View(), n.name, printBufBytes(n.outputBuf), round(n.elapsed+scaledTimeSince(n.start), 1))
 	case "pause":
 		fmt.Fprintf(writer, "⏸ %s %s %s\n", n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
 	case "fail":
@@ -293,6 +294,15 @@ func (m *model) println(n *node, writer io.Writer) {
 		fmt.Fprintf(writer, "%s %s %s %s\n", iconPassed, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
 	}
 
+}
+
+func scaledTimeSince(t time.Time) time.Duration {
+	s := time.Since(t)
+	if flags.replay && flags.rate > 0 {
+		s = time.Duration(float64(s) / flags.rate)
+
+	}
+	return s
 }
 
 func (m *model) View() string {
@@ -316,7 +326,7 @@ func (m *model) View() string {
 	if m.fails > 0 {
 		fmt.Fprintf(&sb, ", %d failed", m.fails)
 	}
-	fmt.Fprintf(&sb, " in %s\n", round(time.Since(m.start), 1))
+	fmt.Fprintf(&sb, " in %s\n", round(scaledTimeSince(m.start), 1))
 
 	if m.quitting {
 		sb.WriteRune('\n')
