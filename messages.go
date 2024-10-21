@@ -11,7 +11,6 @@ type TestEvent struct {
 	Test    string
 	Elapsed float64 // seconds
 	Output  string
-	orig    string
 }
 
 type Done struct{}
