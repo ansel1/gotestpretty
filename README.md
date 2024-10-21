@@ -2,5 +2,5 @@
 
 - [x] Exit code if tests fail
 - [x] Keep printing output after tests complete until pipe is empty
-- [ ] print out the test output at end of run
+- [x] print out the test output at end of run
 - [ ] detect and report panics
