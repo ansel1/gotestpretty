@@ -8,3 +8,4 @@
 - [ ] bottom align the output maybe?
 - [ ] don't skip long tests
 - [ ] what if finished packages sorted to the top, and the summary line was pinned to the bottom?
+- [ ] make the output more closely match non-verbose output

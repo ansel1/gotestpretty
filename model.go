@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ansel1/merry/v2"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -170,41 +171,52 @@ func (m *model) printFinalSummary() tea.Msg {
 	return tea.QuitMsg{}
 }
 
-func (m *model) printNode(n *node, lvl int, writer io.Writer) {
+// printNode prints a line to the writer representing this node, then recursive prints
+// each of the child nodes.  Returns the total number of lines printed.
+func (m *model) printNode(n *node, lvl int, writer io.Writer) int {
 	if skip(n) {
-		return
+		return 0
 	}
 	for i := 0; i < lvl; i++ {
 		_, _ = writer.Write([]byte("  "))
 	}
-	m.println(n, writer)
-	for i := range n.children {
-		m.printNode(&n.children[i], lvl+1, writer)
+	b, _ := m.println(n, writer)
+
+	var lines int
+	if b > 0 {
+		lines = 1
 	}
+
+	for i := range n.children {
+		lines += m.printNode(&n.children[i], lvl+1, writer)
+	}
+	return lines
 }
 
 var iconPassed = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true).Render("✓")
 var iconSkipped = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true).Render("️⍉")
 var iconFailed = lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).Render("️✖")
 
-func (m *model) println(n *node, writer io.Writer) {
+func (m *model) println(n *node, writer io.Writer) (int, error) {
 	if n.name == "" {
 		// root node, no self output
-		return
+		return 0, nil
 	}
 
 	switch n.status {
 	case "start", "run", "cont", "bench":
-		fmt.Fprintf(writer, "%s %s %s %s\n", m.spinner.View(), n.name, printBufBytes(n.outputBuf), round(n.elapsed+scaledTimeSince(n.start), 1))
+		return fmt.Fprintf(writer, "%s %s %s %s\n", m.spinner.View(), n.name, printBufBytes(n.outputBuf), round(n.elapsed+scaledTimeSince(n.start), 1))
 	case "pause":
-		fmt.Fprintf(writer, "⏸ %s %s %s\n", n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
+		return fmt.Fprintf(writer, "⏸ %s %s %s\n", n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
 	case "fail":
-		fmt.Fprintf(writer, "%s %s %s %s\n", iconFailed, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
+		return fmt.Fprintf(writer, "%s %s %s %s\n", iconFailed, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
 	case "skip":
-		fmt.Fprintf(writer, "%s %s %s %s\n", iconSkipped, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
+		return fmt.Fprintf(writer, "%s %s %s %s\n", iconSkipped, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
 	case "pass":
-		fmt.Fprintf(writer, "%s %s %s %s\n", iconPassed, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
+		return fmt.Fprintf(writer, "%s %s %s %s\n", iconPassed, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
 	}
+
+	return 0, merry.Errorf("unknown node status: %s", n.status)
 
 }
 
@@ -225,7 +237,11 @@ func (m *model) String() string {
 
 	var sb strings.Builder
 
-	m.printNode(&m.root, -1, &sb)
+	lines := m.printNode(&m.root, -1, &sb)
+	if lines == 0 {
+		// if no tests have started yet, don't print anything
+		return ""
+	}
 
 	fmt.Fprintf(&sb, "\n")
 	if m.done {
