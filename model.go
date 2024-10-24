@@ -181,7 +181,7 @@ func (m *model) printFinalSummary() tea.Msg {
 // printNode prints a line to the writer representing this node, then recursive prints
 // each of the child nodes.  Returns the total number of lines printed.
 func (m *model) printNode(n *node, writer io.Writer) {
-	for i := -1; i < n.lvl; i++ {
+	for i := 1; i < n.lvl; i++ {
 		_, _ = writer.Write([]byte("  "))
 	}
 	m.println(n, writer)
@@ -190,6 +190,7 @@ func (m *model) printNode(n *node, writer io.Writer) {
 var iconPassed = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true).Render("✓")
 var iconSkipped = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true).Render("️⍉")
 var iconFailed = lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).Render("️✖")
+var gray = lipgloss.NewStyle().Foreground(lipgloss.Color("0"))
 
 func (m *model) println(n *node, writer io.Writer) {
 	if n.name == "" {
@@ -197,9 +198,27 @@ func (m *model) println(n *node, writer io.Writer) {
 		return
 	}
 
+	elapsed := n.elapsed
+
+	var icon string
+
+	switch n.status {
+	case "start", "run", "cont", "bench":
+		elapsed = n.elapsed + scaledTimeSince(n.start)
+		icon = m.spinner.View()
+	case "pause":
+		icon = "⏸"
+	case "fail":
+		icon = iconFailed
+	case "skip":
+		icon = iconSkipped
+	case "pass":
+		icon = iconPassed
+	}
+
 	// the min elapsed time.  If elapsed is less then this, the elapsed time will not be rendered
 	var minElapsed time.Duration
-	digits := 2
+	digits := 3
 
 	if !n.done {
 		// suppress elapsed times less than 1 second
@@ -207,20 +226,7 @@ func (m *model) println(n *node, writer io.Writer) {
 		digits = 1
 	}
 
-	switch n.status {
-	case "start", "run", "cont", "bench":
-		fmt.Fprintf(writer, "%s %s %s", m.spinner.View(), n.name, formatElapsed(n.elapsed+scaledTimeSince(n.start), minElapsed, digits))
-	case "pause":
-		fmt.Fprintf(writer, "⏸ %s %s", n.name, formatElapsed(n.elapsed, minElapsed, digits))
-	case "fail":
-		fmt.Fprintf(writer, "%s %s %s", iconFailed, n.name, formatElapsed(n.elapsed, minElapsed, digits))
-	case "skip":
-		fmt.Fprintf(writer, "%s %s %s", iconSkipped, n.name, formatElapsed(n.elapsed, minElapsed, digits))
-	case "pass":
-		fmt.Fprintf(writer, "%s %s %s", iconPassed, n.name, formatElapsed(n.elapsed, minElapsed, digits))
-	}
-
-	fmt.Fprint(writer, "\n")
+	fmt.Fprintf(writer, "%s %s\t%s\t%s\n", icon, n.name, formatElapsed(elapsed, minElapsed, digits), gray.Render(n.msg))
 }
 
 func (m *model) View() string {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -17,9 +18,18 @@ type node struct {
 	elapsed   time.Duration
 	isTest    bool
 	lvl       int
+	msg       string
 }
 
+var packageSummaryPattern = regexp.MustCompile(`^\S+\s+\t.+\t(\[.*\])\n`)
+
 func (n *node) output(s string) {
+	if n.lvl == 1 {
+		matches := packageSummaryPattern.FindStringSubmatch(s)
+		if len(matches) > 1 {
+			n.msg = matches[1]
+		}
+	}
 	if strings.HasPrefix(s, "===") {
 		// e.g. === RUN, === PAUSE, === CONT
 		// skip it
