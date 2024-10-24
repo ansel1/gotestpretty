@@ -7,18 +7,16 @@ import (
 )
 
 type node struct {
-	name             string
-	start            time.Time
-	status           string
-	done             bool
-	children         []node
-	parent           *node
-	outputBuf        *bytes.Buffer
-	elapsed          time.Duration
-	isTest           bool
-	lvl              int
-	finishedChildren int
-	runningChildren  int
+	name      string
+	start     time.Time
+	status    string
+	done      bool
+	children  []node
+	parent    *node
+	outputBuf *bytes.Buffer
+	elapsed   time.Duration
+	isTest    bool
+	lvl       int
 }
 
 func (n *node) output(s string) {

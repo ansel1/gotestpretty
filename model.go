@@ -6,6 +6,7 @@ import (
 	"container/list"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ type model struct {
 	passes, fails, skips, total int
 	start                       time.Time
 	windowHeight                int
+	maxPrintedLines             int
 }
 
 func newModel() *model {
@@ -95,16 +97,12 @@ func (m *model) processEvent(e TestEvent) tea.Cmd {
 			m.total++
 		}
 		currNode.done = true
-		currNode.parent.finishedChildren++
-		currNode.parent.runningChildren--
 	case "skip":
 		if currNode.isTest {
 			m.skips++
 			m.total++
 		}
 		currNode.done = true
-		currNode.parent.finishedChildren++
-		currNode.parent.runningChildren--
 	case "pause":
 		if currNode.isTest {
 			currNode.elapsed = time.Since(currNode.start)
@@ -113,15 +111,12 @@ func (m *model) processEvent(e TestEvent) tea.Cmd {
 	case "cont":
 		currNode.start = time.Now()
 	case "start", "run", "bench":
-		currNode.parent.runningChildren++
 	case "pass":
 		if currNode.isTest {
 			m.passes++
 			m.total++
 		}
 		currNode.done = true
-		currNode.parent.finishedChildren++
-		currNode.parent.runningChildren--
 	}
 
 	if currNode.done && !skip(currNode) && currNode.outputBuf != nil {
@@ -153,6 +148,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.windowHeight = msg.Height
+		m.maxPrintedLines = 0
 	case error:
 		m.err = msg
 		return m, tea.Quit
@@ -176,6 +172,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) printFinalSummary() tea.Msg {
+	// reset the view
+	m.maxPrintedLines = 0
 	m.prog.Println(m.String())
 	return tea.QuitMsg{}
 }
@@ -199,55 +197,119 @@ func (m *model) println(n *node, writer io.Writer) {
 		return
 	}
 
+	// the min elapsed time.  If elapsed is less then this, the elapsed time will not be rendered
+	var minElapsed time.Duration
+	digits := 2
+
+	if !n.done {
+		// suppress elapsed times less than 1 second
+		minElapsed = time.Second
+		digits = 1
+	}
+
 	switch n.status {
 	case "start", "run", "cont", "bench":
-		fmt.Fprintf(writer, "%s %s %s %s", m.spinner.View(), n.name, printBufBytes(n.outputBuf), round(n.elapsed+scaledTimeSince(n.start), 1))
+		fmt.Fprintf(writer, "%s %s %s", m.spinner.View(), n.name, formatElapsed(n.elapsed+scaledTimeSince(n.start), minElapsed, digits))
 	case "pause":
-		fmt.Fprintf(writer, "⏸ %s %s %s", n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
+		fmt.Fprintf(writer, "⏸ %s %s", n.name, formatElapsed(n.elapsed, minElapsed, digits))
 	case "fail":
-		fmt.Fprintf(writer, "%s %s %s %s", iconFailed, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
+		fmt.Fprintf(writer, "%s %s %s", iconFailed, n.name, formatElapsed(n.elapsed, minElapsed, digits))
 	case "skip":
-		fmt.Fprintf(writer, "%s %s %s %s", iconSkipped, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
+		fmt.Fprintf(writer, "%s %s %s", iconSkipped, n.name, formatElapsed(n.elapsed, minElapsed, digits))
 	case "pass":
-		fmt.Fprintf(writer, "%s %s %s %s", iconPassed, n.name, printBufBytes(n.outputBuf), round(n.elapsed, 1))
-	}
-
-	if n.runningChildren > 0 {
-		fmt.Fprintf(writer, " Running: %d", n.runningChildren)
-	}
-
-	if n.finishedChildren > 0 {
-		fmt.Fprintf(writer, " Done: %d", n.finishedChildren)
+		fmt.Fprintf(writer, "%s %s %s", iconPassed, n.name, formatElapsed(n.elapsed, minElapsed, digits))
 	}
 
 	fmt.Fprint(writer, "\n")
 }
 
 func (m *model) View() string {
+	if m.err != nil {
+		return m.err.Error()
+	}
 	// once we're done, we don't want to print any view.  The final
 	// summary will be dumped to the terminal with tea.Program#Println()
 	if m.done {
 		return ""
 	}
 
-	return m.String()
+	return m.render(true)
 }
 
-func collectPrintableNodes(max int, root *node) *list.List {
-	l := collChildren(root)
+func elide(l *list.List, max int) *list.List {
+	if l.Len() <= max {
+		return l
+	}
 
-	// todo: trim down based on the max number of lines available on the display
+	// first, collect of list of nodes which are candidates for eliding, sorted in order of
+	// preferred eliding order: deepest first, then passed or skipped, paused, failed, then running
+
+	candidates := make([]*list.Element, 0, l.Len())
+	for e := l.Front(); e != nil; e = e.Next() {
+		if e.Value.(*node).lvl > 1 {
+			candidates = append(candidates, e)
+		}
+	}
+
+	slices.SortStableFunc(candidates, func(a, b *list.Element) int {
+		an, bn := a.Value.(*node), b.Value.(*node)
+		if i := bn.lvl - an.lvl; i != 0 {
+			return i
+		}
+
+		if an.done != bn.done {
+			if an.done {
+				return -1
+			} else {
+				return 1
+			}
+		}
+
+		if an.status == bn.status {
+			return 0
+		}
+
+		return statusRank(an.status) - statusRank(bn.status)
+	})
+
+	toRm := l.Len() - max
+	if toRm > len(candidates) {
+		toRm = len(candidates)
+	}
+
+	for _, e := range candidates[:toRm] {
+		l.Remove(e)
+	}
 
 	return l
 }
 
-func collChildren(n *node) *list.List {
+func statusRank(s string) int {
+	switch s {
+	case "pass", "skip":
+		return 1
+	case "fail":
+		return 3
+	case "pause":
+		return 2
+	case "cont", "start", "run", "bench":
+		return 4
+	}
+	return 0
+}
+
+// returns a flat list of all printable nodes, and the max lvl seen
+func collChildren(nodes []node) *list.List {
+	if len(nodes) == 0 {
+		return nil
+	}
+
 	l := list.New()
 
 	var lastDone *list.Element
 
-	for i := range n.children {
-		c := &n.children[i]
+	for i := range nodes {
+		c := &nodes[i]
 		if skip(c) {
 			continue
 		}
@@ -265,8 +327,9 @@ func collChildren(n *node) *list.List {
 			e = l.PushBack(c)
 		}
 
-		if len(c.children) > 0 {
-			for child := collChildren(c).Front(); child != nil; child = child.Next() {
+		cl := collChildren(c.children)
+		if cl != nil && cl.Len() > 0 {
+			for child := cl.Front(); child != nil; child = child.Next() {
 				e = l.InsertAfter(child.Value, e)
 			}
 		}
@@ -280,26 +343,43 @@ func collChildren(n *node) *list.List {
 }
 
 func (m *model) String() string {
-	if m.err != nil {
-		return m.err.Error()
-	}
+	return m.render(false)
+}
 
+func (m *model) render(fitToWindow bool) string {
 	var sb strings.Builder
 
-	l := collectPrintableNodes(m.windowHeight-2, &m.root)
+	l := collChildren(m.root.children)
 
-	if l.Len() == 0 {
+	if l == nil || l.Len() == 0 {
 		// if no tests have started yet, don't print anything
 		return ""
+	}
+
+	if fitToWindow {
+		l = elide(l, m.windowHeight-2)
 	}
 
 	for e := l.Front(); e != nil; e = e.Next() {
 		m.printNode(e.Value.(*node), &sb)
 	}
 
+	if fitToWindow {
+		printedLines := l.Len() + 2
+
+		if printedLines >= m.maxPrintedLines {
+			m.maxPrintedLines = printedLines
+		} else {
+			// add extra empty lines so the summary stays pinned to the bottom
+			for i := m.maxPrintedLines - printedLines; i > 0; i-- {
+				fmt.Fprintf(&sb, "\n")
+			}
+		}
+	}
+
 	fmt.Fprintf(&sb, "\n")
 	if m.done {
-		fmt.Fprintf(&sb, "DONE ")
+		sb.WriteString("DONE ")
 	}
 
 	fmt.Fprintf(&sb, "%d tests", m.total)
@@ -323,26 +403,34 @@ func scaledTimeSince(t time.Time) time.Duration {
 	return s
 }
 
-func printBufBytes(buf *bytes.Buffer) string {
-	if buf == nil {
+// func printBufBytes(buf *bytes.Buffer) string {
+// 	if buf == nil {
+// 		return ""
+// 	}
+
+// 	return byteCountDecimal(buf.Len())
+// }
+
+// func byteCountDecimal(b int) string {
+// 	const unit = 1000
+// 	if b < unit {
+// 		return fmt.Sprintf("%dB", b)
+// 	}
+// 	div, exp := int64(unit), 0
+// 	for n := b / unit; n >= unit; n /= unit {
+// 		div *= unit
+// 		exp++
+// 	}
+
+// 	return fmt.Sprintf("%.9g%cB", float64(b)/float64(div), "kMGTPE"[exp])
+// }
+
+func formatElapsed(d, min time.Duration, digits int) string {
+	if d < min {
 		return ""
 	}
 
-	return byteCountDecimal(buf.Len())
-}
-
-func byteCountDecimal(b int) string {
-	const unit = 1000
-	if b < unit {
-		return fmt.Sprintf("%dB", b)
-	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-
-	return fmt.Sprintf("%.9g%cB", float64(b)/float64(div), "kMGTPE"[exp])
+	return round(d, digits).String()
 }
 
 var divs = []time.Duration{
