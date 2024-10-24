@@ -21,14 +21,16 @@ type node struct {
 	msg       string
 }
 
-var packageSummaryPattern = regexp.MustCompile(`^\S+\s+\t.+\t(\[.*\])\n`)
+var packageSummaryPattern = regexp.MustCompile(`^(.{4})?\t\S+\t([^\s()[\]]*\s)?(.*)\n`)
 
 func (n *node) output(s string) {
 	if n.lvl == 1 {
 		matches := packageSummaryPattern.FindStringSubmatch(s)
-		if len(matches) > 1 {
-			n.msg = matches[1]
+		if len(matches) == 4 {
+			n.msg = matches[3]
 		}
+
+		return
 	}
 	if strings.HasPrefix(s, "===") {
 		// e.g. === RUN, === PAUSE, === CONT

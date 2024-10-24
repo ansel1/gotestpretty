@@ -12,4 +12,4 @@
 - [ ] -help
 - [ ] finalize the name
 - [ ] stable sort of the finished packages (when packages finish, they currently jump from the bottom to whenever they started.  Would be less jumpy if finished packages were sorted in the order they finished.)
-- [ ] include coverage if present
+- [x] include coverage if present
