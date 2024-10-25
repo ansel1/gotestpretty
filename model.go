@@ -221,7 +221,7 @@ func (m *model) printNode(n *node, writer io.Writer) {
 var iconPassed = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true).Render("✓")
 var iconSkipped = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true).Render("️⍉")
 var iconFailed = lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).Render("️✖")
-var gray = lipgloss.NewStyle().Foreground(lipgloss.Color("0"))
+var gray = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
 func (m *model) println(n *node, writer io.Writer) {
 	if n.name == "" {
