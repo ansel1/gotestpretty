@@ -6,6 +6,7 @@ import (
 	"container/list"
 	"fmt"
 	"io"
+	"iter"
 	"slices"
 	"strings"
 	"time"
@@ -38,19 +39,34 @@ func (m *model) Init() (tea.Model, tea.Cmd) {
 	return m, m.spinner.Tick
 }
 
+// listSeq is a helper method that lets you range over a linked list.
+func listSeq(l *list.List) iter.Seq2[*list.Element, *node] {
+	return func(yield func(*list.Element, *node) bool) {
+		if l == nil {
+			return
+		}
+
+		for e := l.Front(); e != nil; e = e.Next() {
+			if !yield(e, e.Value.(*node)) {
+				return
+			}
+		}
+	}
+}
+
 // nodeFor traverses the tree looking for the node that represents the object related
 // to the event.  If nodes in the path doesn't exist yet, it is created.
-func (m *model) nodeFor(e TestEvent) *node {
-	nameParts := strings.Split(e.Test, "/")
+func (m *model) nodeFor(ev TestEvent) (*node, *list.Element) {
+	nameParts := strings.Split(ev.Test, "/")
 	if len(nameParts) == 1 && strings.TrimSpace(nameParts[0]) == "" {
 		nameParts = []string{}
 	}
-	nameParts = append([]string{e.Package}, nameParts...)
+	nameParts = append([]string{ev.Package}, nameParts...)
 
-	findNode := func(name string, currNode *node) *node {
-		for i, child := range currNode.children {
-			if child.name == name {
-				return &currNode.children[i]
+	findNode := func(name string, currNode *node) (*node, *list.Element) {
+		for e, n := range listSeq(currNode.children) {
+			if n.name == name {
+				return n, e
 			}
 		}
 
@@ -58,39 +74,44 @@ func (m *model) nodeFor(e TestEvent) *node {
 		node := node{
 			name:   name,
 			parent: currNode,
-			isTest: e.Test != "",
+			isTest: ev.Test != "",
 			start:  time.Now(),
 			lvl:    currNode.lvl + 1,
 		}
-		currNode.children = append(currNode.children, node)
-		return &currNode.children[len(currNode.children)-1]
+		if currNode.children == nil {
+			currNode.children = list.New()
+		}
+
+		return &node, currNode.children.PushBack(&node)
 	}
 
 	currNode := &m.root
+	var e *list.Element
+
 	for _, s := range nameParts {
-		currNode = findNode(s, currNode)
+		currNode, e = findNode(s, currNode)
 	}
 
-	return currNode
+	return currNode, e
 }
 
-func (m *model) processEvent(e TestEvent) tea.Cmd {
-	currNode := m.nodeFor(e)
+func (m *model) processEvent(ev TestEvent) tea.Cmd {
+	currNode, e := m.nodeFor(ev)
 
-	if e.Elapsed > 0 {
-		currNode.elapsed = time.Duration(e.Elapsed * float64(time.Second))
+	if ev.Elapsed > 0 {
+		currNode.elapsed = time.Duration(ev.Elapsed * float64(time.Second))
 		currNode.start = time.Time{}
 	}
 
-	if e.Action == "output" {
-		currNode.output(e.Output)
+	if ev.Action == "output" {
+		currNode.output(ev.Output)
 		// for output, return immediately.  not a node state.
 		return nil
 	}
 
-	currNode.status = e.Action
+	currNode.status = ev.Action
 
-	switch e.Action {
+	switch ev.Action {
 	case "fail":
 		if currNode.isTest {
 			m.fails++
@@ -119,25 +140,35 @@ func (m *model) processEvent(e TestEvent) tea.Cmd {
 		currNode.done = true
 	}
 
-	if currNode.done && !skip(currNode) && currNode.outputBuf != nil {
-		// if this is a child test that has just finished, merge its
-		// output into the output of its parent.
-		if currNode.parent != nil && currNode.parent.isTest {
-			if currNode.parent.outputBuf == nil {
-				currNode.parent.outputBuf = bytes.NewBuffer(nil)
-			}
-			copyWithIndent(currNode.outputBuf, currNode.parent.outputBuf)
-		} else {
-			// this is a top-level test, all it's children are done,
-			// so it is safe to dump this test's output to the console
-			output := currNode.outputBuf.String()
-			output = strings.TrimRight(output, "\n")
-			return func() tea.Msg {
-				m.prog.Println(output)
-				return nil
-			}
+	if currNode.done {
+		if drop(currNode) {
+			// discard the node
+			currNode.parent.children.Remove(e)
+			return nil
 		}
 
+		if currNode.outputBuf != nil {
+			// if this is a child test that has just finished, merge its
+			// output into the output of its parent.
+			if currNode.parent != nil && currNode.parent.isTest {
+				if currNode.parent.outputBuf == nil {
+					currNode.parent.outputBuf = bytes.NewBuffer(nil)
+				}
+				copyWithIndent(currNode.outputBuf, currNode.parent.outputBuf)
+			} else {
+				// this is a top-level test, all it's children are done,
+				// so it is safe to dump this test's output to the console
+				output := currNode.outputBuf.String()
+				output = strings.TrimRight(output, "\n")
+				return func() tea.Msg {
+					m.prog.Println(output)
+					return nil
+				}
+			}
+
+			// we can drop the output now that it has been printed.
+			currNode.outputBuf = nil
+		}
 	}
 
 	return nil
@@ -305,8 +336,8 @@ func statusRank(s string) int {
 }
 
 // returns a flat list of all printable nodes, and the max lvl seen
-func collChildren(nodes []node) *list.List {
-	if len(nodes) == 0 {
+func collChildren(nodes *list.List) *list.List {
+	if nodes == nil || nodes.Len() == 0 {
 		return nil
 	}
 
@@ -314,11 +345,7 @@ func collChildren(nodes []node) *list.List {
 
 	var lastDone *list.Element
 
-	for i := range nodes {
-		c := &nodes[i]
-		if skip(c) {
-			continue
-		}
+	for _, c := range listSeq(nodes) {
 
 		var e *list.Element
 
@@ -333,11 +360,8 @@ func collChildren(nodes []node) *list.List {
 			e = l.PushBack(c)
 		}
 
-		cl := collChildren(c.children)
-		if cl != nil && cl.Len() > 0 {
-			for child := cl.Front(); child != nil; child = child.Next() {
-				e = l.InsertAfter(child.Value, e)
-			}
+		for _, child := range listSeq(collChildren(c.children)) {
+			e = l.InsertAfter(child, e)
 		}
 
 		if c.done {
@@ -463,11 +487,13 @@ func copyWithIndent(from, to *bytes.Buffer) {
 	}
 }
 
-func skip(n *node) bool {
+func drop(n *node) bool {
 	switch {
 	case !n.isTest:
 		return false
 	case flags.includeSlow && n.elapsed > flags.slowThreshold:
+		return false
+	case n.children != nil && n.children.Len() > 0:
 		return false
 	case !flags.includeSkipped && n.status == "skip":
 		return true

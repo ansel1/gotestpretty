@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"container/list"
 	"regexp"
 	"strings"
 	"time"
@@ -12,7 +13,7 @@ type node struct {
 	start     time.Time
 	status    string
 	done      bool
-	children  []node
+	children  *list.List
 	parent    *node
 	outputBuf *bytes.Buffer
 	elapsed   time.Duration
