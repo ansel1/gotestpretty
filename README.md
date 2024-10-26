@@ -6,7 +6,7 @@
 - [ ] detect and report panics
 - [x] don't print anything until the first test starts
 - [x] bottom align the output maybe?
-- [ ] don't skip long tests
+- [x] don't skip long tests
 - [x] what if finished packages sorted to the top, and the summary line was pinned to the bottom?
 - [x] make the output more closely match non-verbose output
 - [ ] -help

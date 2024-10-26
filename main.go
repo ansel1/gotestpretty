@@ -40,7 +40,7 @@ func init() {
 
 func main() {
 	m := newModel()
-	p := tea.NewProgram(m, tea.WithInput(nil))
+	p := tea.NewProgram(m)
 
 	m.prog = p
 
