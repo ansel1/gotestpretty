@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"time"
 
@@ -25,6 +26,7 @@ var flags struct {
 	includeSlow    bool
 	slowThreshold  time.Duration
 	noTTY          bool
+	debug          bool
 }
 
 func parseFlags() {
@@ -36,12 +38,23 @@ func parseFlags() {
 	flag.BoolVar(&flags.includeSkipped, "include-skipped", true, "Include skipped tests")
 	flag.DurationVar(&flags.slowThreshold, "slow-threshold", time.Second, "Set slow threshold")
 	flag.BoolVar(&flags.noTTY, "notty", false, "Don't open a tty (not typically needed)")
+	flag.BoolVar(&flags.debug, "debug", false, "Enable debugging, logs are saved to debug.log")
 
 	flag.Parse()
 }
 
 func main() {
 	parseFlags()
+	if flags.debug {
+		f, err := tea.LogToFile("debug.log", "debug")
+		if err != nil {
+			fmt.Println("fatal:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+	} else {
+		log.Default().SetOutput(io.Discard)
+	}
 
 	m := newModel()
 	var p *tea.Program

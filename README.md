@@ -15,3 +15,4 @@
 - [x] include coverage if present
 - [x] skipped subtests are not printed because the parent test is not marked as skipped
 - [ ] print final summary even when ctrl-c
+- [ ] when a tty is allocated, and output from another process is piped to us, and that output includes stderr, formatting gets all messed
