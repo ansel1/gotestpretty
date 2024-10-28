@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"log"
 	"slices"
 	"strings"
 	"time"
@@ -56,17 +57,17 @@ func listSeq(l *list.List) iter.Seq2[*list.Element, *node] {
 
 // nodeFor traverses the tree looking for the node that represents the object related
 // to the event.  If nodes in the path doesn't exist yet, it is created.
-func (m *model) nodeFor(ev TestEvent) (*node, *list.Element) {
+func (m *model) nodeFor(ev TestEvent) *node {
 	nameParts := strings.Split(ev.Test, "/")
 	if len(nameParts) == 1 && strings.TrimSpace(nameParts[0]) == "" {
 		nameParts = []string{}
 	}
 	nameParts = append([]string{ev.Package}, nameParts...)
 
-	findNode := func(name string, currNode *node) (*node, *list.Element) {
-		for e, n := range listSeq(currNode.children) {
+	findNode := func(name string, currNode *node) *node {
+		for _, n := range currNode.children {
 			if n.name == name {
-				return n, e
+				return n
 			}
 		}
 
@@ -79,25 +80,23 @@ func (m *model) nodeFor(ev TestEvent) (*node, *list.Element) {
 			lvl:        currNode.lvl + 1,
 			firstStart: time.Now(),
 		}
-		if currNode.children == nil {
-			currNode.children = list.New()
-		}
 
-		return &node, currNode.children.PushBack(&node)
+		currNode.children = append(currNode.children, &node)
+
+		return &node
 	}
 
 	currNode := &m.root
-	var e *list.Element
 
 	for _, s := range nameParts {
-		currNode, e = findNode(s, currNode)
+		currNode = findNode(s, currNode)
 	}
 
-	return currNode, e
+	return currNode
 }
 
 func (m *model) processEvent(ev TestEvent) tea.Cmd {
-	currNode, e := m.nodeFor(ev)
+	currNode := m.nodeFor(ev)
 
 	if ev.Elapsed > 0 {
 		currNode.elapsed = time.Duration(ev.Elapsed * float64(time.Second))
@@ -144,14 +143,9 @@ func (m *model) processEvent(ev TestEvent) tea.Cmd {
 		currNode.doneTs = time.Now()
 	}
 
-	if currNode.done {
-		if drop(currNode) {
-			// discard the node
-			currNode.parent.children.Remove(e)
-			return nil
-		}
-
-		if currNode.outputBuf != nil {
+	// if node is finished, dump its output if appropriate
+	if currNode.done && currNode.outputBuf != nil {
+		if !drop(currNode) {
 			// if this is a child test that has just finished, merge its
 			// output into the output of its parent.
 			if currNode.parent != nil && currNode.parent.isTest {
@@ -169,49 +163,58 @@ func (m *model) processEvent(ev TestEvent) tea.Cmd {
 					return nil
 				}
 			}
-
-			// we can drop the output now that it has been printed.
-			currNode.outputBuf = nil
 		}
+		// we can drop the output now to free up memory.
+		currNode.outputBuf = nil
 	}
 
-	currNode.parent.children = sortChildren(currNode.parent.children)
+	// re-sort and filter this node's siblings based on the status change
+	// make sure to store the parent ref before calling processChildren().
+	// processChildren() may zero-ize the current node if it has been dropped.
+	parent := currNode.parent
+	parent.children = processChildren(parent.children)
 
 	return nil
 }
 
-func sortChildren(l *list.List) *list.List {
-	// this is inefficient, just testing out the idea first.
+func processChildren(s []*node) []*node {
+	slices.SortStableFunc(s, sortNodes)
 
-	s := make([]*node, 0, l.Len())
-
-	for _, n := range listSeq(l) {
-		s = append(s, n)
-	}
-
-	slices.SortStableFunc(s, func(a, b *node) int {
-		if a.done != b.done {
-			if a.done {
-				return -1
-			} else {
-				return 1
-			}
+	// droppable nodes should have been sorted to the end.
+	for i := len(s) - 1; i >= 0; i-- {
+		if drop(s[i]) {
+			s[i].msg = "dropped" // debugging, should never be seen, if it is, something is wrong
+			s[i] = nil           // blank ref to ensure gc
+			s = s[:i]
 		}
+	}
+	return s
+}
+
+func sortNodes(a, b *node) int {
+	// sort dropped nodes to the end
+	if da, db := drop(a), drop(b); da != db {
+		if da {
+			return 1
+		}
+		return -1
+
+	}
+	// sort done nodes to the top
+	if a.done != b.done {
 		if a.done {
-			// if both are done, sort by finished time, ascending
-			return a.doneTs.Compare(b.doneTs)
+			return -1
+		} else {
+			return 1
 		}
-
-		// if both are still running, sort by started time, ascending
-		return a.firstStart.Compare(b.firstStart)
-	})
-
-	l = list.New()
-	for _, n := range s {
-		l.PushBack(n)
 	}
-	return l
+	if a.done {
+		// sort done nodes by finished time ascending
+		return a.doneTs.Compare(b.doneTs)
+	}
 
+	// sort running nodes by started time, ascending
+	return a.firstStart.Compare(b.firstStart)
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -263,11 +266,6 @@ var iconFailed = lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).
 var gray = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
 func (m *model) println(n *node, writer io.Writer) {
-	if n.name == "" {
-		// root node, no self output
-		return
-	}
-
 	elapsed := n.elapsed
 
 	var icon string
@@ -284,6 +282,8 @@ func (m *model) println(n *node, writer io.Writer) {
 		icon = iconSkipped
 	case "pass":
 		icon = iconPassed
+	default:
+		icon = "??? " + n.status + " ???"
 	}
 
 	// the min elapsed time.  If elapsed is less then this, the elapsed time will not be rendered
@@ -317,12 +317,15 @@ func elide(l *list.List, max int) *list.List {
 		return l
 	}
 
+	if max < 0 {
+		max = 0
+	}
+
 	// first, collect of list of nodes which are candidates for eliding, sorted in order of
 	// preferred eliding order: deepest first, then passed or skipped, paused, failed, then running
-
 	candidates := make([]*list.Element, 0, l.Len())
-	for e := l.Front(); e != nil; e = e.Next() {
-		if e.Value.(*node).lvl > 1 {
+	for e, n := range listSeq(l) {
+		if n.lvl > 1 {
 			candidates = append(candidates, e)
 		}
 	}
@@ -349,7 +352,7 @@ func elide(l *list.List, max int) *list.List {
 	})
 
 	toRm := l.Len() - max
-	if toRm > len(candidates) {
+	if toRm > len(candidates) { // candidates may be shorter than the original list length.  not all nodes are candidates for eliding
 		toRm = len(candidates)
 	}
 
@@ -374,36 +377,39 @@ func statusRank(s string) int {
 	return 0
 }
 
-func collectNodes(nodes *list.List) *list.List {
+func collectNodes(nodes []*node) *list.List {
 	l := list.New()
 
 	if nodes == nil {
 		return l
 	}
 
-	stack := make([]*list.Element, 0, 50)
-	stack = append(stack, nodes.Front())
+	stack := make([][]*node, 0, 50)
+	stack = append(stack, nodes)
 
 	for i := len(stack) - 1; i >= 0; {
-		e := stack[i]
-		if e == nil {
+		s := stack[i]
+		if len(s) == 0 {
 			// pop off the stack
 			stack = stack[:i]
 			i--
 			continue
 		}
 
-		// process the current element
-		l.PushBack(e.Value)
+		// process the first node in the current slice
+		n := s[0]
+		if drop(n) {
+			log.Printf("somehow I'm collecting a dropped node: %v", n.name)
+		}
+		l.PushBack(n)
 
-		// replace current element in the stack when the next sibling element
-		stack[i] = e.Next()
+		// dequeue the first node in the current slice
+		stack[i] = s[1:]
 
-		// if current element has children, push the first child onto the end of stack
+		// if current node has children, push the children into the stack
 		// and bump i to process the children next
-		if cl := e.Value.(*node).children; cl != nil && cl.Len() > 0 {
-			e1 := cl.Front()
-			stack = append(stack, e1)
+		if len(n.children) > 0 {
+			stack = append(stack, n.children)
 			i++
 		}
 	}
@@ -425,11 +431,15 @@ func (m *model) render(fitToWindow bool) string {
 		return ""
 	}
 
+	origLen := l.Len()
+
 	if fitToWindow {
 		l = elide(l, m.windowHeight-2)
 	}
 
+	var c int
 	for _, n := range listSeq(l) {
+		c++
 		m.printNode(n, &sb)
 	}
 
@@ -458,7 +468,11 @@ func (m *model) render(fitToWindow bool) string {
 	if m.fails > 0 {
 		fmt.Fprintf(&sb, ", %d failed", m.fails)
 	}
-	fmt.Fprintf(&sb, " in %s\n", round(scaledTimeSince(m.start), 1))
+	fmt.Fprintf(&sb, " in %s", round(scaledTimeSince(m.start), 1))
+	if flags.debug {
+		fmt.Fprintf(&sb, " h: %v maxPrinted: %v origLen: %v printedLen: %v c: %v", m.windowHeight, m.maxPrintedLines, origLen, l.Len(), c)
+	}
+	sb.WriteRune('\n')
 
 	return sb.String()
 }
@@ -532,7 +546,7 @@ func drop(n *node) bool {
 		return false
 	case flags.includeSlow && n.elapsed > flags.slowThreshold:
 		return false
-	case n.children != nil && n.children.Len() > 0:
+	case len(n.children) > 0:
 		// don't drop the node if it still has any children
 		// this only behaves correctly on the assumption that drop() is only called on the parent node
 		// when all the child nodes have finished.
