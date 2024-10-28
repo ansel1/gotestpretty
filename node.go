@@ -22,14 +22,32 @@ type node struct {
 	msg       string
 }
 
-var packageSummaryPattern = regexp.MustCompile(`^(.{4})?\t\S+\t([^\s()[\]]*\s)?(.*)\n`)
+var packageSummaryPattern = regexp.MustCompile(`^(.{4})?\t\S+\t([^\s()[\]]*)?(\t(.*))?\n`)
 
 func (n *node) output(s string) {
 	if n.lvl == 1 {
 		matches := packageSummaryPattern.FindStringSubmatch(s)
-		if len(matches) == 4 {
-			n.msg = matches[3]
+		
+		switch {
+		case len(matches) == 5:
+			// set node message, then skip
+			n.msg = matches[4]
+			return
+		case s == "PASS\n":
+			// skip
+			return
+		case s == "FAIL\n":
+			// skip
+			return
+		case s == "SKIP\n":
+			// skip
+			return
+		case strings.HasPrefix(s, "coverage: "):
+			// skip
+			return
 		}
+
+		n.append(s)
 
 		return
 	}
