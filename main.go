@@ -24,9 +24,10 @@ var flags struct {
 	includeSkipped bool
 	includeSlow    bool
 	slowThreshold  time.Duration
+	noTTY          bool
 }
 
-func init() {
+func parseFlags() {
 	flag.BoolVar(&flags.replay, "replay", false, "Replay events with pauses to simulate original test run")
 	flag.Float64Var(&flags.rate, "rate", 1, "Set rate to replay, defaults to 1 (original speed), 0.5 = double speed, 0 = no pauses, ignored unless --replay=true")
 	flag.StringVar(&flags.infile, "f", "", "Read from <filename> instead of stdin")
@@ -34,13 +35,21 @@ func init() {
 	flag.BoolVar(&flags.includeSlow, "include-slow", false, "Include slow tests")
 	flag.BoolVar(&flags.includeSkipped, "include-skipped", true, "Include skipped tests")
 	flag.DurationVar(&flags.slowThreshold, "slow-threshold", time.Second, "Set slow threshold")
+	flag.BoolVar(&flags.noTTY, "notty", false, "Don't open a tty (not typically needed)")
 
 	flag.Parse()
 }
 
 func main() {
+	parseFlags()
+
 	m := newModel()
-	p := tea.NewProgram(m)
+	var p *tea.Program
+	if flags.noTTY {
+		p = tea.NewProgram(m, tea.WithInput(nil))
+	} else {
+		p = tea.NewProgram(m)
+	}
 
 	m.prog = p
 
