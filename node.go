@@ -9,17 +9,19 @@ import (
 )
 
 type node struct {
-	name      string
-	start     time.Time
-	status    string
-	done      bool
-	children  *list.List
-	parent    *node
-	outputBuf *bytes.Buffer
-	elapsed   time.Duration
-	isTest    bool
-	lvl       int
-	msg       string
+	name       string
+	firstStart time.Time
+	start      time.Time
+	status     string
+	done       bool
+	doneTs     time.Time
+	children   *list.List
+	parent     *node
+	outputBuf  *bytes.Buffer
+	elapsed    time.Duration
+	isTest     bool
+	lvl        int
+	msg        string
 }
 
 var packageSummaryPattern = regexp.MustCompile(`^(.{4})?\t\S+\t([^\s()[\]]*)?(\t(.*))?\n`)
@@ -27,7 +29,7 @@ var packageSummaryPattern = regexp.MustCompile(`^(.{4})?\t\S+\t([^\s()[\]]*)?(\t
 func (n *node) output(s string) {
 	if n.lvl == 1 {
 		matches := packageSummaryPattern.FindStringSubmatch(s)
-		
+
 		switch {
 		case len(matches) == 5:
 			// set node message, then skip

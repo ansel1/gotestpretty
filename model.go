@@ -72,11 +72,12 @@ func (m *model) nodeFor(ev TestEvent) (*node, *list.Element) {
 
 		// node doesn't exist, create it
 		node := node{
-			name:   name,
-			parent: currNode,
-			isTest: ev.Test != "",
-			start:  time.Now(),
-			lvl:    currNode.lvl + 1,
+			name:       name,
+			parent:     currNode,
+			isTest:     ev.Test != "",
+			start:      time.Now(),
+			lvl:        currNode.lvl + 1,
+			firstStart: time.Now(),
 		}
 		if currNode.children == nil {
 			currNode.children = list.New()
@@ -118,12 +119,14 @@ func (m *model) processEvent(ev TestEvent) tea.Cmd {
 			m.total++
 		}
 		currNode.done = true
+		currNode.doneTs = time.Now()
 	case "skip":
 		if currNode.isTest {
 			m.skips++
 			m.total++
 		}
 		currNode.done = true
+		currNode.doneTs = time.Now()
 	case "pause":
 		if currNode.isTest {
 			currNode.elapsed = time.Since(currNode.start)
@@ -138,6 +141,7 @@ func (m *model) processEvent(ev TestEvent) tea.Cmd {
 			m.total++
 		}
 		currNode.done = true
+		currNode.doneTs = time.Now()
 	}
 
 	if currNode.done {
@@ -171,7 +175,42 @@ func (m *model) processEvent(ev TestEvent) tea.Cmd {
 		}
 	}
 
+	currNode.parent.children = sortChildren(currNode.parent.children)
+
 	return nil
+}
+
+func sortChildren(l *list.List) *list.List {
+	// this is inefficient, just testing out the idea first.
+
+	s := make([]*node, 0, l.Len())
+
+	for _, n := range listSeq(l) {
+		s = append(s, n)
+	}
+
+	slices.SortStableFunc(s, func(a, b *node) int {
+		if a.done != b.done {
+			if a.done {
+				return -1
+			} else {
+				return 1
+			}
+		}
+		if a.done {
+			// if both are done, sort by finished time, ascending
+			return a.doneTs.Compare(b.doneTs)
+		}
+
+		// if both are still running, sort by started time, ascending
+		return a.firstStart.Compare(b.firstStart)
+	})
+
+	l = list.New()
+	for _, n := range s {
+		l.PushBack(n)
+	}
+	return l
 
 }
 
@@ -335,37 +374,37 @@ func statusRank(s string) int {
 	return 0
 }
 
-// returns a flat list of all printable nodes, and the max lvl seen
-func collChildren(nodes *list.List) *list.List {
-	if nodes == nil || nodes.Len() == 0 {
-		return nil
-	}
-
+func collectNodes(nodes *list.List) *list.List {
 	l := list.New()
 
-	var lastDone *list.Element
+	if nodes == nil {
+		return l
+	}
 
-	for _, c := range listSeq(nodes) {
+	stack := make([]*list.Element, 0, 50)
+	stack = append(stack, nodes.Front())
 
-		var e *list.Element
-
-		// sort finished child nodes first
-		if c.done {
-			if lastDone == nil {
-				e = l.PushFront(c)
-			} else {
-				e = l.InsertAfter(c, lastDone)
-			}
-		} else {
-			e = l.PushBack(c)
+	for i := len(stack) - 1; i >= 0; {
+		e := stack[i]
+		if e == nil {
+			// pop off the stack
+			stack = stack[:i]
+			i--
+			continue
 		}
 
-		for _, child := range listSeq(collChildren(c.children)) {
-			e = l.InsertAfter(child, e)
-		}
+		// process the current element
+		l.PushBack(e.Value)
 
-		if c.done {
-			lastDone = e
+		// replace current element in the stack when the next sibling element
+		stack[i] = e.Next()
+
+		// if current element has children, push the first child onto the end of stack
+		// and bump i to process the children next
+		if cl := e.Value.(*node).children; cl != nil && cl.Len() > 0 {
+			e1 := cl.Front()
+			stack = append(stack, e1)
+			i++
 		}
 	}
 
@@ -379,7 +418,7 @@ func (m *model) String() string {
 func (m *model) render(fitToWindow bool) string {
 	var sb strings.Builder
 
-	l := collChildren(m.root.children)
+	l := collectNodes(m.root.children)
 
 	if l == nil || l.Len() == 0 {
 		// if no tests have started yet, don't print anything
@@ -390,8 +429,8 @@ func (m *model) render(fitToWindow bool) string {
 		l = elide(l, m.windowHeight-2)
 	}
 
-	for e := l.Front(); e != nil; e = e.Next() {
-		m.printNode(e.Value.(*node), &sb)
+	for _, n := range listSeq(l) {
+		m.printNode(n, &sb)
 	}
 
 	if fitToWindow {
@@ -494,6 +533,9 @@ func drop(n *node) bool {
 	case flags.includeSlow && n.elapsed > flags.slowThreshold:
 		return false
 	case n.children != nil && n.children.Len() > 0:
+		// don't drop the node if it still has any children
+		// this only behaves correctly on the assumption that drop() is only called on the parent node
+		// when all the child nodes have finished.
 		return false
 	case !flags.includeSkipped && n.status == "skip":
 		return true
