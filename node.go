@@ -23,7 +23,7 @@ type node struct {
 	msg        string
 }
 
-var packageSummaryPattern = regexp.MustCompile(`^(.{4})?\t\S+\t?([^\s()[\]]*)?(\t(.*))?\n`)
+var packageSummaryPattern = regexp.MustCompile(`^(.{4})?\t\S+(\t[msh\d\.]*)?(\s(.*))?\n`)
 
 func (n *node) output(s string) {
 	if n.lvl == 1 {

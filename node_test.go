@@ -19,12 +19,14 @@ func TestPackageMsg(t *testing.T) {
 	gitlab.protectv.local/ncryptify/sallyport.git/cmd/sallyport		coverage: 0.0% of statements
 ok  	gitlab.protectv.local/ncryptify/sallyport.git	0.946s	coverage: 0.0% of statements [no tests to run]
 ?   	gitlab.protectv.local/ncryptify/minerva.git/cryptocore	[no test files]
+ok  	github.com/golang-migrate/migrate/v4/dktesting	0.230s [no tests to run]
 `
 	out := []string{
 		"",
 		"coverage: 0.0% of statements",
 		"coverage: 0.0% of statements [no tests to run]",
 		"[no test files]",
+		"[no tests to run]",
 	}
 
 	for i, line := range strings.SplitAfter(in, "\n") {
