@@ -91,6 +91,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// print final summary
+	m.root.processChildren(true, true)
+	fmt.Println(m.String())
+
 	if m.fails > 0 {
 		os.Exit(1)
 	}

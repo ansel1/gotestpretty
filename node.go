@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -100,4 +101,32 @@ func (n *node) findChild(nameParts []string) (*node, []string) {
 		}
 	}
 	return nil, nameParts
+}
+
+func (n *node) processChildren(final, recurse bool) {
+	s := n.children
+	if len(s) == 0 {
+		return
+	}
+
+	if recurse {
+		for _, c := range s {
+			c.processChildren(final, recurse)
+		}
+	}
+
+	slices.SortStableFunc(s, nodeSorter(final))
+
+	if final {
+		// droppable nodes should have been sorted to the end.
+		for i := len(s) - 1; i >= 0; i-- {
+			if drop(s[i]) {
+				s[i].msg = "dropped" // debugging, should never be seen, if it is, something is wrong
+				s[i] = nil           // blank ref to ensure gc
+				s = s[:i]
+			}
+		}
+	}
+
+	n.children = s
 }

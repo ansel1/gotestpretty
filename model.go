@@ -145,7 +145,7 @@ func (m *model) processEvent(ev TestEvent) tea.Cmd {
 
 	if currNode.done {
 		// do a final sort of the children, and drop children which should be dropped
-		currNode.children = processChildren(currNode.children, true)
+		currNode.processChildren(true, false)
 	}
 
 	// if node is finished, dump its output if appropriate
@@ -174,30 +174,9 @@ func (m *model) processEvent(ev TestEvent) tea.Cmd {
 	}
 
 	// re-sort and filter this node's siblings based on the status change
-	parent := currNode.parent
-	parent.children = processChildren(parent.children, false)
+	currNode.parent.processChildren(false, false)
 
 	return nil
-}
-
-func processChildren(s []*node, final bool) []*node {
-	if len(s) == 0 {
-		return s
-	}
-
-	slices.SortStableFunc(s, nodeSorter(final))
-
-	if final {
-		// droppable nodes should have been sorted to the end.
-		for i := len(s) - 1; i >= 0; i-- {
-			if drop(s[i]) {
-				s[i].msg = "dropped" // debugging, should never be seen, if it is, something is wrong
-				s[i] = nil           // blank ref to ensure gc
-				s = s[:i]
-			}
-		}
-	}
-	return s
 }
 
 func nodeSorter(final bool) func(*node, *node) int {
@@ -252,16 +231,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.processEvent(msg)
 	case Done:
 		m.done = true
-		return m, m.printFinalSummary
+		return m, tea.Quit
 	}
 	return m, nil
-}
-
-func (m *model) printFinalSummary() tea.Msg {
-	// reset the view
-	m.maxPrintedLines = 0
-	m.prog.Println(m.String())
-	return tea.QuitMsg{}
 }
 
 // printNode prints a line to the writer representing this node, then recursive prints

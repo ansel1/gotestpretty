@@ -58,7 +58,7 @@ Some other tools you can try:
 - [x] stable sort of the finished packages (when packages finish, they currently jump from the bottom to whenever they started.  Would be less jumpy if finished packages were sorted in the order they finished.)
 - [x] include coverage if present
 - [x] skipped subtests are not printed because the parent test is not marked as skipped
-- [ ] print final summary even when ctrl-c
+- [x] print final summary even when ctrl-c
 - [x] when a tty is allocated, and output from another process is piped to us, and that output includes stderr, formatting gets all messed
 - [x] if test names have slashes in them, it creates phantom nodes
 - [ ] if passed a file, and not replaying, maybe just skip the TUI completely and skip straight to the summary
