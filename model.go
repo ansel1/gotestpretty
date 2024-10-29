@@ -64,35 +64,36 @@ func (m *model) nodeFor(ev TestEvent) *node {
 	}
 	nameParts = append([]string{ev.Package}, nameParts...)
 
-	findNode := func(name string, currNode *node) *node {
-		for _, n := range currNode.children {
-			if n.name == name {
-				return n
-			}
-		}
+	var last, next *node
 
-		// node doesn't exist, create it
-		node := node{
-			name:       name,
-			parent:     currNode,
-			isTest:     ev.Test != "",
-			start:      time.Now(),
-			lvl:        currNode.lvl + 1,
-			firstStart: time.Now(),
-		}
-
-		currNode.children = append(currNode.children, &node)
-
-		return &node
+	for next = &m.root; len(nameParts) > 0 && next != nil; {
+		last = next
+		next, nameParts = last.findChild(nameParts)
 	}
 
-	currNode := &m.root
-
-	for _, s := range nameParts {
-		currNode = findNode(s, currNode)
+	if next != nil {
+		return next
 	}
 
-	return currNode
+	// node not found, so create a new node
+	// we assume that we will *always* see a separate event
+	// for a parent node before we see any event for a child node.
+	// That means, if we got here and we're *not* on the last namePart,
+	// then this event must represent a test that has a slash in the name.
+	// So the name of this new node must be all the remaining name parts
+	// joined back together with slashes.
+	node := node{
+		name:       strings.Join(nameParts, "/"),
+		parent:     last,
+		isTest:     ev.Test != "",
+		start:      time.Now(),
+		lvl:        last.lvl + 1,
+		firstStart: time.Now(),
+	}
+
+	last.children = append(last.children, &node)
+
+	return &node
 }
 
 func (m *model) processEvent(ev TestEvent) tea.Cmd {

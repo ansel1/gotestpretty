@@ -11,10 +11,11 @@
 - [x] make the output more closely match non-verbose output
 - [ ] -help
 - [ ] finalize the name
-- [ ] stable sort of the finished packages (when packages finish, they currently jump from the bottom to whenever they started.  Would be less jumpy if finished packages were sorted in the order they finished.)
+- [x] stable sort of the finished packages (when packages finish, they currently jump from the bottom to whenever they started.  Would be less jumpy if finished packages were sorted in the order they finished.)
 - [x] include coverage if present
 - [x] skipped subtests are not printed because the parent test is not marked as skipped
 - [ ] print final summary even when ctrl-c
 - [ ] when a tty is allocated, and output from another process is piped to us, and that output includes stderr, formatting gets all messed
 - [ ] node msg for skipped
 - [ ] node msg for failed?
+- [x] if test names have slashes in them, it creates phantom nodes

@@ -81,3 +81,23 @@ func (n *node) prepend(s string) {
 	}
 	n.outputBuf = buf
 }
+
+// findChild searches for a child node.  It first looks for a child named
+// nameParts[0], then if not found, looks for nameParts[0] + "/" + nameParts[1], etc.
+// It keeps searching until it finds a matching child, or runs out of name parts.
+// If a child is found, it returns the child, and the remaining unused name parts.
+// If no child is found, returns nil, and all nameParts
+func (n *node) findChild(nameParts []string) (*node, []string) {
+	// Test names may have slashes in them, so we can't rely on simply splitting the test
+	// name by slashes.  We need to see if there are any child nodes named after any compination of the remaining
+	// name parts.
+	for j := 1; j <= len(nameParts); j++ {
+		name := strings.Join(nameParts[:j], "/")
+		for _, c := range n.children {
+			if c.name == name {
+				return c, nameParts[j:]
+			}
+		}
+	}
+	return nil, nameParts
+}
