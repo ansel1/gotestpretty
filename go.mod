@@ -1,4 +1,4 @@
-module goprettytest
+module gotestpretty
 
 go 1.23.0
 
