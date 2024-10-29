@@ -414,7 +414,7 @@ func statusRank(s string) int {
 	case "pause":
 		return 1
 	case "skip":
-		return 5
+		return 1
 	case "fail":
 		return 5
 	case "cont", "start", "run", "bench":
