@@ -337,10 +337,8 @@ func elide(l *list.List, max int) *list.List {
 	// first, collect of list of nodes which are candidates for eliding, sorted in order of
 	// preferred eliding order: deepest first, then passed or skipped, paused, failed, then running
 	candidates := make([]*list.Element, 0, l.Len())
-	for e, n := range listSeq(l) {
-		if n.lvl > 1 {
-			candidates = append(candidates, e)
-		}
+	for e := range listSeq(l) {
+		candidates = append(candidates, e)
 	}
 
 	slices.SortStableFunc(candidates, func(a, b *list.Element) int {
@@ -482,9 +480,7 @@ func (m *model) render(fitToWindow bool) string {
 		l = elide(l, m.windowHeight-2)
 	}
 
-	var c int
 	for _, n := range listSeq(l) {
-		c++
 		m.printNode(n, &sb)
 	}
 
@@ -515,9 +511,8 @@ func (m *model) render(fitToWindow bool) string {
 	}
 	fmt.Fprintf(&sb, " in %s", round(scaledTimeSince(m.start), 1))
 	if flags.debug {
-		fmt.Fprintf(&sb, " h: %v maxPrinted: %v origLen: %v printedLen: %v c: %v", m.windowHeight, m.maxPrintedLines, origLen, l.Len(), c)
+		fmt.Fprintf(&sb, " h: %v maxPrinted: %v origLen: %v printedLen: %v", m.windowHeight, m.maxPrintedLines, origLen, l.Len())
 	}
-	sb.WriteRune('\n')
 
 	return sb.String()
 }
