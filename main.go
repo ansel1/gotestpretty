@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
@@ -30,15 +31,32 @@ var flags struct {
 }
 
 func parseFlags() {
-	flag.BoolVar(&flags.replay, "replay", false, "Replay events with pauses to simulate original test run")
-	flag.Float64Var(&flags.rate, "rate", 1, "Set rate to replay, defaults to 1 (original speed), 0.5 = double speed, 0 = no pauses, ignored unless --replay=true")
+	flag.BoolVar(&flags.replay, "replay", false, "Use with -f, replay events with pauses to simulate original test run")
+	flag.Float64Var(&flags.rate, "rate", 1, "Use with -replay, set rate to replay\nDefaults to 1 (original speed), 0.5 = double speed, 0 = no pauses")
 	flag.StringVar(&flags.infile, "f", "", "Read from <filename> instead of stdin")
-	flag.BoolVar(&flags.includePassed, "include-passed", false, "Include passed tests")
-	flag.BoolVar(&flags.includeSlow, "include-slow", false, "Include slow tests")
-	flag.BoolVar(&flags.includeSkipped, "include-skipped", true, "Include skipped tests")
-	flag.DurationVar(&flags.slowThreshold, "slow-threshold", time.Second, "Set slow threshold")
+	flag.BoolVar(&flags.includePassed, "include-passed", false, "Include passed tests in summary")
+	flag.BoolVar(&flags.includeSlow, "include-slow", false, "Include slow tests tests in summary")
+	flag.BoolVar(&flags.includeSkipped, "include-skipped", true, "Include skipped tests in summary")
+	flag.DurationVar(&flags.slowThreshold, "slow-threshold", time.Second, "Set slow test threshold")
 	flag.BoolVar(&flags.noTTY, "notty", false, "Don't open a tty (not typically needed)")
 	flag.BoolVar(&flags.debug, "debug", false, "Enable debugging, logs are saved to debug.log")
+
+	flag.Usage = func() {
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "Usage:\n")
+		fmt.Fprintf(&sb, "\tgo test -json ./... | %s [flags]\n", os.Args[0])
+		fmt.Fprintf(&sb, "\tgo test -json ./... 2>&1 | %s [flags]\n", os.Args[0])
+		fmt.Fprintf(&sb, "\t%s -f <path> [flags]\n", os.Args[0])
+		fmt.Fprintf(&sb, `
+%[1]s formats and summarizes the output of 'go test -json'.  Test output can be piped
+to stdin for real-time progress.
+
+JSON test output can be mixed with other build output.  %[1]s will detect and consume 
+the test output, and pass the rest of the output through.`, os.Args[0])
+
+		fmt.Fprint(flag.CommandLine.Output(), sb.String(), "\n\nFlags:\n")
+		flag.PrintDefaults()
+	}
 
 	flag.Parse()
 }
