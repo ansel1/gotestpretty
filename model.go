@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"log"
 	"slices"
 	"strings"
 	"time"
@@ -144,6 +143,11 @@ func (m *model) processEvent(ev TestEvent) tea.Cmd {
 		currNode.doneTs = time.Now()
 	}
 
+	if currNode.done {
+		// do a final sort of the children, and drop children which should be dropped
+		currNode.children = processChildren(currNode.children, true)
+	}
+
 	// if node is finished, dump its output if appropriate
 	if currNode.done && currNode.outputBuf != nil {
 		if !drop(currNode) {
@@ -170,52 +174,60 @@ func (m *model) processEvent(ev TestEvent) tea.Cmd {
 	}
 
 	// re-sort and filter this node's siblings based on the status change
-	// make sure to store the parent ref before calling processChildren().
-	// processChildren() may zero-ize the current node if it has been dropped.
 	parent := currNode.parent
-	parent.children = processChildren(parent.children)
+	parent.children = processChildren(parent.children, false)
 
 	return nil
 }
 
-func processChildren(s []*node) []*node {
-	slices.SortStableFunc(s, sortNodes)
+func processChildren(s []*node, final bool) []*node {
+	if len(s) == 0 {
+		return s
+	}
 
-	// droppable nodes should have been sorted to the end.
-	for i := len(s) - 1; i >= 0; i-- {
-		if drop(s[i]) {
-			s[i].msg = "dropped" // debugging, should never be seen, if it is, something is wrong
-			s[i] = nil           // blank ref to ensure gc
-			s = s[:i]
+	slices.SortStableFunc(s, nodeSorter(final))
+
+	if final {
+		// droppable nodes should have been sorted to the end.
+		for i := len(s) - 1; i >= 0; i-- {
+			if drop(s[i]) {
+				s[i].msg = "dropped" // debugging, should never be seen, if it is, something is wrong
+				s[i] = nil           // blank ref to ensure gc
+				s = s[:i]
+			}
 		}
 	}
 	return s
 }
 
-func sortNodes(a, b *node) int {
-	// sort dropped nodes to the end
-	if da, db := drop(a), drop(b); da != db {
-		if da {
-			return 1
-		}
-		return -1
+func nodeSorter(final bool) func(*node, *node) int {
+	return func(a, b *node) int {
+		if final {
+			// sort dropped nodes to the end
+			if da, db := drop(a), drop(b); da != db {
+				if da {
+					return 1
+				}
+				return -1
 
-	}
-	// sort done nodes to the top
-	if a.done != b.done {
+			}
+		}
+		// sort done nodes to the top
+		if a.done != b.done {
+			if a.done {
+				return -1
+			} else {
+				return 1
+			}
+		}
 		if a.done {
-			return -1
-		} else {
-			return 1
+			// sort done nodes by finished time ascending
+			return a.doneTs.Compare(b.doneTs)
 		}
-	}
-	if a.done {
-		// sort done nodes by finished time ascending
-		return a.doneTs.Compare(b.doneTs)
-	}
 
-	// sort running nodes by started time, ascending
-	return a.firstStart.Compare(b.firstStart)
+		// sort running nodes by started time, ascending
+		return a.firstStart.Compare(b.firstStart)
+	}
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -333,47 +345,82 @@ func elide(l *list.List, max int) *list.List {
 
 	slices.SortStableFunc(candidates, func(a, b *list.Element) int {
 		an, bn := a.Value.(*node), b.Value.(*node)
+
+		if i := statusRank(an.status) - statusRank(bn.status); i != 0 {
+			return i
+		}
+
 		if i := bn.lvl - an.lvl; i != 0 {
 			return i
 		}
 
-		if an.done != bn.done {
-			if an.done {
-				return -1
+		if i := statusRank2(an.status) - statusRank2(bn.status); i != 0 {
+			return i
+		}
+
+		if i := an.doneTs.Compare(bn.doneTs); i != 0 {
+			return i
+		}
+
+		if i := an.firstStart.Compare(bn.firstStart); i != 0 {
+			return i
+		}
+
+		return 0
+
+	})
+
+	// remove candidates until either we run out, or the list is short enough
+	for i := 0; i < len(candidates) && l.Len() > max; i++ {
+		// when we remove a node, also remove all its descendents
+		// always call Next() *before* removing the current element,
+		// calling Next() on an element that's already been removed just
+		// returns nil
+		e := candidates[i]
+		for e1 := e.Next(); e1 != nil; {
+			if e1.Value.(*node).lvl > e.Value.(*node).lvl {
+				e2 := e1.Next()
+				l.Remove(e1)
+				e1 = e2
 			} else {
-				return 1
+				break
 			}
 		}
 
-		if an.status == bn.status {
-			return 0
-		}
-
-		return statusRank(an.status) - statusRank(bn.status)
-	})
-
-	toRm := l.Len() - max
-	if toRm > len(candidates) { // candidates may be shorter than the original list length.  not all nodes are candidates for eliding
-		toRm = len(candidates)
-	}
-
-	for _, e := range candidates[:toRm] {
 		l.Remove(e)
 	}
 
 	return l
 }
 
-func statusRank(s string) int {
+func statusRank2(s string) int {
 	switch s {
-	case "pass", "skip":
+	case "pass":
+		return 1
+	case "pause":
+		return 1
+	case "skip":
 		return 1
 	case "fail":
-		return 3
-	case "pause":
-		return 2
-	case "cont", "start", "run", "bench":
 		return 4
+	case "cont", "start", "run", "bench":
+		return 5
+	}
+	return 0
+}
+
+func statusRank(s string) int {
+	switch s {
+	case "pass":
+		return 1
+	case "pause":
+		return 1
+	case "skip":
+		return 5
+	case "fail":
+		return 5
+	case "cont", "start", "run", "bench":
+		return 5
 	}
 	return 0
 }
@@ -399,9 +446,6 @@ func collectNodes(nodes []*node) *list.List {
 
 		// process the first node in the current slice
 		n := s[0]
-		if drop(n) {
-			log.Printf("somehow I'm collecting a dropped node: %v", n.name)
-		}
 		l.PushBack(n)
 
 		// dequeue the first node in the current slice

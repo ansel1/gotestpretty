@@ -19,3 +19,4 @@
 - [ ] node msg for skipped
 - [ ] node msg for failed?
 - [x] if test names have slashes in them, it creates phantom nodes
+- [x] if passed a file, and not replaying, maybe just skip the TUI completely and skip straight to the summary
