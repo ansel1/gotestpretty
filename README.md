@@ -1,12 +1,15 @@
-# gotestpretty
+gotestpretty
+============
 
 A command line tool for summarizing the results of go test, in real time.
 
-## Installation
+Installation
+------------
 
     go install github.com/ansel1/gotestpretty
 
-## Usage
+Usage
+-----
 
 Pipe `go test -json` into `gotestpretty`:
 
@@ -31,7 +34,8 @@ passed directly to output, so you can pipe any output which has test output embe
 
     make all | gotestpretty
 
-## Why?
+Why?
+----
 
 Other tools exist that do similar stuff, but most don't give real time feedback while the tests are running.  Or are
 hard to use when the commands are embedded in build scripts or makefiles.  Or I just preferred a different style of formatting.  `gotestpretty`'s formatting is inspired by JetBrains Goland's test runner UI.
@@ -42,7 +46,13 @@ Some other tools you can try:
 - [gotestsum](https://github.com/gotestyourself/gotestsum)
 - [gotestfmt](https://github.com/GoTestTools/gotestfmt?tab=readme-ov-file)
 
-## TODO
+License
+-------
+
+This project is licensed under the terms of the MIT license.
+
+TODO
+----
 
 - [x] Exit code if tests fail
 - [x] Keep printing output after tests complete until pipe is empty
@@ -63,5 +73,5 @@ Some other tools you can try:
 - [x] if test names have slashes in them, it creates phantom nodes
 - [ ] if passed a file, and not replaying, maybe just skip the TUI completely and skip straight to the summary
 - [ ] README
-- [ ] license
+- [x] license
 - [ ] when dumping output of finished package, include a header showing which package it is (currently, tests are printed with no indication which package they are part of)
