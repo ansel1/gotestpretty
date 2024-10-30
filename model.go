@@ -23,6 +23,7 @@ type model struct {
 	spinner                     spinner.Model
 	prog                        *tea.Program
 	passes, fails, skips, total int
+	overallFail                 bool
 	start                       time.Time
 	windowHeight                int
 	maxPrintedLines             int
@@ -116,6 +117,10 @@ func (m *model) processEvent(ev TestEvent) tea.Cmd {
 		if currNode.isTest {
 			m.fails++
 			m.total++
+		} else {
+			// if a package fails, the overall result of the
+			// test run is failed
+			m.overallFail = true
 		}
 		currNode.done = true
 		currNode.doneTs = time.Now()
@@ -471,7 +476,11 @@ func (m *model) render(fitToWindow bool) string {
 
 	fmt.Fprintf(&sb, "\n")
 	if m.done {
-		sb.WriteString("DONE ")
+		if m.overallFail {
+			sb.WriteString("FAILED ")
+		} else {
+			sb.WriteString("PASSED ")
+		}
 	}
 
 	fmt.Fprintf(&sb, "%d tests", m.total)
