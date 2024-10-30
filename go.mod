@@ -1,4 +1,4 @@
-module gotestpretty
+module github.com/ansel1/gotestpretty
 
 go 1.23.0
 
