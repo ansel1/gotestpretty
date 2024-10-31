@@ -34,19 +34,6 @@ func (n *node) output(s string) {
 		case len(matches) == 5:
 			// set node message, then skip
 			n.msg = matches[4]
-			return
-		case s == "PASS\n":
-			// skip
-			return
-		case s == "FAIL\n":
-			// skip
-			return
-		case s == "SKIP\n":
-			// skip
-			return
-		case strings.HasPrefix(s, "coverage: "):
-			// skip
-			return
 		}
 
 		n.append(s)

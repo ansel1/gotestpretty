@@ -156,16 +156,17 @@ func (m *model) processEvent(ev TestEvent) tea.Cmd {
 	// if node is finished, dump its output if appropriate
 	if currNode.done && currNode.outputBuf != nil {
 		if !drop(currNode) {
-			// if this is a child test that has just finished, merge its
-			// output into the output of its parent.
-			if currNode.parent != nil && currNode.parent.isTest {
+			// rollup the output of tests into their parents
+			// eventually this will be rolled up into the output
+			// of the package node, then finally dumped to stdout
+			if currNode.isTest {
 				if currNode.parent.outputBuf == nil {
 					currNode.parent.outputBuf = bytes.NewBuffer(nil)
 				}
 				copyWithIndent(currNode.outputBuf, currNode.parent.outputBuf)
 			} else {
-				// this is a top-level test, all it's children are done,
-				// so it is safe to dump this test's output to the console
+				// this is a package node, and all it's children are done,
+				// so it is safe to dump this output to the console
 				output := currNode.outputBuf.String()
 				output = strings.TrimRight(output, "\n")
 				return func() tea.Msg {

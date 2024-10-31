@@ -74,6 +74,7 @@ TODO
 - [x] when a tty is allocated, and output from another process is piped to us, and that output includes stderr, formatting gets all messed
 - [x] if test names have slashes in them, it creates phantom nodes
 - [ ] if passed a file, and not replaying, maybe just skip the TUI completely and skip straight to the summary
-- [ ] README
+- [x] README
 - [x] license
-- [ ] when dumping output of finished package, include a header showing which package it is (currently, tests are printed with no indication which package they are part of)
+- [x] when dumping output of finished package, include a header showing which package it is (currently, tests are printed with no indication which package they are part of)
+- [ ] With testify tests, it *seems* like some tests fail, but in fact their parent tests pass.  Should we consider only paying attention to the parent node's success/fail status, and suppressing output from child tests if the parent is successful?  (all the way up to the package level)
