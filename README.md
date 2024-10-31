@@ -3,6 +3,8 @@ gotestpretty
 
 A command line tool for summarizing the results of go test, in real time.
 
+![demo](tty.gif "Demo")
+
 Installation
 ------------
 
